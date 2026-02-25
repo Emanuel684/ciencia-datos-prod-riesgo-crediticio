@@ -1,6 +1,6 @@
 REM ===================================
 REM Author: juan.parra
-REM Purpose: Script to setup a Python virtual environment, install requirements, 
+REM Purpose: Script to setup a Python virtual environment, install requirements, and register the environment as a Jupyter kernel.
 REM ===================================
  
 echo.
