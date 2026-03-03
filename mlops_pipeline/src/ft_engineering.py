@@ -87,10 +87,13 @@ class DerivedFeatures(BaseEstimator, TransformerMixin):
     def transform(self, X):
         X = X.copy()
 
-        if {"total_otros_prestamos", "capital_prestado", "salario_cliente"}.issubset(X.columns):
+        if {"total_otros_prestamos", "capital_prestado", "salario_cliente"}.issubset(
+            X.columns
+        ):
             X["relacion_deuda_ingreso"] = np.where(
                 X["salario_cliente"] > 0,
-                (X["total_otros_prestamos"] + X["capital_prestado"]) / X["salario_cliente"],
+                (X["total_otros_prestamos"] + X["capital_prestado"])
+                / X["salario_cliente"],
                 0,
             )
 
@@ -104,7 +107,8 @@ class DerivedFeatures(BaseEstimator, TransformerMixin):
         if {"cuota_pactada", "plazo_meses", "capital_prestado"}.issubset(X.columns):
             X["ratio_interes_total"] = np.where(
                 X["capital_prestado"] > 0,
-                ((X["cuota_pactada"] * X["plazo_meses"]) - X["capital_prestado"]) / X["capital_prestado"],
+                ((X["cuota_pactada"] * X["plazo_meses"]) - X["capital_prestado"])
+                / X["capital_prestado"],
                 0,
             )
 
@@ -199,185 +203,35 @@ pipeline_basemodel = Pipeline(
 )
 
 # 3. Pipeline ML
+def make_pipeline_ml() -> Pipeline:
+    """Returns a new, unfitted pipeline_ml instance."""
+    base = Pipeline(
+        steps=[
+            ("drop_columns", ColumnDropper(cols_to_drop=COLUMNS_TO_DROP)),
+            ("to_category", ToCategory(cols=CATEGORY_COLUMNS)),
+            ("outliers_to_nan", OutliersToNaN(bounds=OUTLIER_BOUNDS)),
+            ("imputation", KNNColumnImputer(cols=IMPUTE_COLUMNS, n_neighbors=5)),
+            ("derived_features", DerivedFeatures()),
+        ]
+    )
+    return Pipeline(
+        steps=[
+            ("basemodel", base),
+            ("preprocessor", AutoPreprocessorToDF()),
+        ]
+    )
+
 
 # Definir columnas numéricas y categóricas
-pipeline_ml = Pipeline(
-    steps=[
-        ("basemodel", pipeline_basemodel),
-        ("preprocessor", AutoPreprocessorToDF()),
-    ]
-)
+pipeline_ml = make_pipeline_ml()
 
 
 def split_features_target(df, target_col="Pago_atiempo"):
     if target_col not in df.columns:
-        raise ValueError(f"La columna objetivo '{target_col}' no existe en el dataframe.")
+        raise ValueError(
+            f"La columna objetivo '{target_col}' no existe en el dataframe."
+        )
 
     X = df.drop(columns=[target_col])
     y = df[target_col]
     return X, y
-
-
-# import pandas as pd
-# import numpy as np
-# from sklearn.base import BaseEstimator, TransformerMixin
-# from sklearn.pipeline import Pipeline
-# from sklearn.compose import ColumnTransformer
-# from sklearn.preprocessing import StandardScaler, OneHotEncoder, FunctionTransformer
-
-# class ToDF(BaseEstimator, TransformerMixin):
-#     def __init__(self, numeric_features, categorical_features):
-#         self.numeric_features = numeric_features
-#         self.categorical_features = categorical_features
-#         self.ct_ = None
-
-#     def fit(self, X, y=None):
-#         try:
-#             ohe = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
-#         except TypeError:
-#             ohe = OneHotEncoder(handle_unknown="ignore", sparse=False)
-
-#         self.ct_ = ColumnTransformer(
-#             transformers=[
-#                 ("num", StandardScaler(), self.numeric_features),
-#                 ("cat", ohe, self.categorical_features),
-#             ]
-#         )
-#         self.ct_.fit(X, y)
-#         return self
-
-#     def transform(self, X):
-#         Xt = self.ct_.transform(X)
-
-#         try:
-#             feat_names = self.ct_.get_feature_names_out()
-#         except AttributeError:
-#             feat_names = []
-#             for name, trans, cols in self.ct_.transformers_:
-#                 if name == "remainder" and trans == "drop":
-#                     continue
-#                 if hasattr(trans, "get_feature_names_out"):
-#                     feat_names.extend(trans.get_feature_names_out(cols))
-#                 else:
-#                     feat_names.extend(cols)
-#         return pd.DataFrame(Xt, columns=feat_names, index=X.index)
-
-
-# class ColumnasNulos(BaseEstimator, TransformerMixin):
-#     def __init__(self, cols_to_drop):
-#         self.cols_to_drop = cols_to_drop
-
-#     def fit(self, X, y=None):
-#         return self
-
-#     def transform(self, X):
-#         return X.drop(columns=self.cols_to_drop, errors="ignore")
-
-# class Imputacion(BaseEstimator, TransformerMixin):
-
-#     def fit(self, X, y=None):
-#         self.median_saldo_principal = X["column"].median()
-#         self.median_saldo_mora = X["column"].median()
-#         self.mean_puntaje = X["column"].mean()
-#         return self
-
-#     def transform(self, X):
-#         X = X.copy()
-#         X["saldo_principal"] = X["saldo_principal"].fillna(self.median_saldo_principal)
-#         X["saldo_mora"] = X["saldo_mora"].fillna(self.median_saldo_mora)
-#         X["puntaje_datacredito"] = X["puntaje_datacredito"].fillna(self.mean_puntaje)
-#         return X
-
-# class Outliers(BaseEstimator, TransformerMixin):
-
-#     def fit(self, X, y=None):
-#         return self
-
-#     def transform(self, X):
-#         return X[X["edad_cliente"] < 100].copy()
-
-# class NuevasVariables(BaseEstimator, TransformerMixin):
-#     pass
-
-# class ToCategory(BaseEstimator, TransformerMixin):
-#     def __init__(self, cols):
-#         self.cols = cols
-
-#     def fit(self, X, y=None):
-#         return self
-
-#     def transform(self, X):
-#         X = X.copy()
-#         for c in self.cols:
-#             if c in X.columns:
-#                 X[c] = X[c].astype("category")
-#         return X
-
-# class ColumnasIrrelevantes(BaseEstimator, TransformerMixin):
-#     def __init__(self, cols_to_drop):
-#         self.cols_to_drop = cols_to_drop
-
-#     def fit(self, X, y=None):
-#         return self
-
-#     def transform(self, X):
-#         return X.drop(columns=self.cols_to_drop, errors="ignore")
-
-# class EliminarCategorias(BaseEstimator, TransformerMixin):
-#     def __init__(self, target_col, cats_to_drop):
-#         self.target_col = target_col
-#         self.cats_to_drop = cats_to_drop
-
-#     def fit(self, X, y=None):
-#         return self
-
-#     def transform(self, X):
-#         return X[~X[self.target_col].isin(self.cats_to_drop)].copy()
-
-# class AgregarTarget(BaseEstimator, TransformerMixin):
-#     def __init__(self, target_col="column"):
-#         self.target_col = target_col
-#         self._y = None
-
-#     def fit(self, X, y=None):
-#         self._y = pd.Series(y, index=getattr(X, "index", None), name=self.target_col) if y is not None else None
-#         return self
-
-#     def transform(self, X):
-#         if self._y is None:
-#             return X
-#         X = X.copy()
-#         X[self.target_col] = self._y.reindex(X.index)
-#         return X
-
-
-# # 2. Pipeline Base
-
-# pipeline_basemodel = Pipeline(steps=[
-#     ("eliminar_nulos", ColumnasNulos(cols_to_drop=[""])),
-#     ("imputacion", Imputacion()),
-#     ("outliers", Outliers()),
-#     ("nuevas_variables", NuevasVariables()),
-#     ("to_category", ToCategory(cols=[""])),
-#     ("columnas_irrelevantes", ColumnasIrrelevantes(cols_to_drop=[""])),
-#     ("eliminar_categorias", EliminarCategorias(target_col="", cats_to_drop=[ ]))
-# ])
-
-
-# # 3. Pipeline ML
-
-# # Definir columnas numéricas y categóricas
-# numeric_features = [""]
-# categorical_features = [""""""]
-
-# preprocessor = ColumnTransformer(
-#     transformers=[
-#         ("num", StandardScaler(), numeric_features),
-#         ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_features)
-#     ])
-
-# pipeline_ml = Pipeline(steps=[
-#     ("basemodel", pipeline_basemodel),
-#     ("preprocessor", ToDF(numeric_features=numeric_features, categorical_features=categorical_features)),
-
-# ])

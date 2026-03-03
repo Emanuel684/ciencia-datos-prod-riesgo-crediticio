@@ -20,81 +20,83 @@ from model_training import RANDOM_STATE, summarize_classification
 
 @dataclass
 class EvaluationConfig:
-		data_path: str = "Base_de_datos.xlsx"
-		output_dir: str = "artifacts/evaluation"
-		target_col: str = "Pago_atiempo"
-		test_size: float = 0.25
-		deploy_endpoint_url: Optional[str] = None
+    data_path: str = "Base_de_datos.xlsx"
+    output_dir: str = "artifacts/evaluation"
+    target_col: str = "Pago_atiempo"
+    test_size: float = 0.25
+    deploy_endpoint_url: Optional[str] = None
 
 
-def _post_batch_prediction(endpoint_url: str, records: List[Dict[str, Any]]) -> Dict[str, Any]:
-		payload = json.dumps({"records": records}).encode("utf-8")
-		request = urllib.request.Request(
-				endpoint_url,
-				data=payload,
-				headers={"Content-Type": "application/json"},
-				method="POST",
-		)
+def _post_batch_prediction(
+    endpoint_url: str, records: List[Dict[str, Any]]
+) -> Dict[str, Any]:
+    payload = json.dumps({"records": records}).encode("utf-8")
+    request = urllib.request.Request(
+        endpoint_url,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
 
-		with urllib.request.urlopen(request, timeout=60) as response:
-				body = response.read().decode("utf-8")
-		return json.loads(body)
+    with urllib.request.urlopen(request, timeout=60) as response:
+        body = response.read().decode("utf-8")
+    return json.loads(body)
 
 
 def _predict_deployed(
-		x_test_raw: pd.DataFrame,
-		endpoint_url: Optional[str] = None,
+    x_test_raw: pd.DataFrame,
+    endpoint_url: Optional[str] = None,
 ) -> Dict[str, Any]:
-		records = x_test_raw.to_dict(orient="records")
+    records = x_test_raw.to_dict(orient="records")
 
-		if endpoint_url:
-				try:
-						return _post_batch_prediction(endpoint_url, records)
-				except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError):
-						pass
+    if endpoint_url:
+        try:
+            return _post_batch_prediction(endpoint_url, records)
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError):
+            pass
 
-		local_service = ModelDeploymentService()
-		response = local_service.predict_batch(records)
-		return response.model_dump()
+    local_service = ModelDeploymentService()
+    response = local_service.predict_batch(records)
+    return response.model_dump()
 
 
 def _build_classification_report_table(metrics: Dict[str, float]) -> pd.DataFrame:
-		return pd.DataFrame(
-				{
-						"metric": [
-								"accuracy",
-								"precision",
-								"recall",
-								"f1",
-								"balanced_accuracy",
-								"roc_auc",
-						],
-						"value": [
-								metrics.get("accuracy"),
-								metrics.get("precision"),
-								metrics.get("recall"),
-								metrics.get("f1"),
-								metrics.get("balanced_accuracy"),
-								metrics.get("roc_auc"),
-						],
-				}
-		)
+    return pd.DataFrame(
+        {
+            "metric": [
+                "accuracy",
+                "precision",
+                "recall",
+                "f1",
+                "balanced_accuracy",
+                "roc_auc",
+            ],
+            "value": [
+                metrics.get("accuracy"),
+                metrics.get("precision"),
+                metrics.get("recall"),
+                metrics.get("f1"),
+                metrics.get("balanced_accuracy"),
+                metrics.get("roc_auc"),
+            ],
+        }
+    )
 
 
 def _render_metrics_tab(
-		output_html: Path,
-		metrics_table: pd.DataFrame,
-		metadata: Dict[str, Any],
-		confusion_matrix_path: Path,
+    output_html: Path,
+    metrics_table: pd.DataFrame,
+    metadata: Dict[str, Any],
+    confusion_matrix_path: Path,
 ) -> None:
-		metrics_rows = "\n".join(
-				[
-						f"<tr><td>{row.metric}</td><td>{row.value:.6f}</td></tr>"
-						for row in metrics_table.itertuples(index=False)
-				]
-		)
+    metrics_rows = "\n".join(
+        [
+            f"<tr><td>{row.metric}</td><td>{row.value:.6f}</td></tr>"
+            for row in metrics_table.itertuples(index=False)
+        ]
+    )
 
-		html = f"""
+    html = f"""
 <!DOCTYPE html>
 <html lang=\"es\">
 <head>
@@ -136,10 +138,10 @@ def _render_metrics_tab(
 	<div id=\"tab-meta\" class=\"tab-content\">
 		<h2>Metadata de evaluación</h2>
 		<ul>
-			<li>Registros evaluados: <code>{metadata['n_records']}</code></li>
-			<li>Tiempo inferencia batch (segundos): <code>{metadata['inference_seconds']:.6f}</code></li>
-			<li>Endpoint usado: <code>{metadata['endpoint_used']}</code></li>
-			<li>Dataset: <code>{metadata['data_path']}</code></li>
+			<li>Registros evaluados: <code>{metadata["n_records"]}</code></li>
+			<li>Tiempo inferencia batch (segundos): <code>{metadata["inference_seconds"]:.6f}</code></li>
+			<li>Endpoint usado: <code>{metadata["endpoint_used"]}</code></li>
+			<li>Dataset: <code>{metadata["data_path"]}</code></li>
 		</ul>
 	</div>
 
@@ -161,80 +163,86 @@ def _render_metrics_tab(
 </html>
 """
 
-		output_html.write_text(html, encoding="utf-8")
+    output_html.write_text(html, encoding="utf-8")
 
 
-def evaluate_deployed_model(config: EvaluationConfig = EvaluationConfig()) -> Dict[str, Any]:
-		output_dir = Path(config.output_dir)
-		output_dir.mkdir(parents=True, exist_ok=True)
+def evaluate_deployed_model(
+    config: EvaluationConfig = EvaluationConfig(),
+) -> Dict[str, Any]:
+    output_dir = Path(config.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-		df = pd.read_excel(config.data_path)
-		x_raw, y = split_features_target(df, target_col=config.target_col)
-		y = y.astype(int)
+    df = pd.read_excel(config.data_path)
+    x_raw, y = split_features_target(df, target_col=config.target_col)
+    y = y.astype(int)
 
-		_, x_test_raw, _, y_test = train_test_split(
-				x_raw,
-				y,
-				test_size=config.test_size,
-				stratify=y,
-				random_state=RANDOM_STATE,
-		)
+    _, x_test_raw, _, y_test = train_test_split(
+        x_raw,
+        y,
+        test_size=config.test_size,
+        stratify=y,
+        random_state=RANDOM_STATE,
+    )
 
-		start = time.perf_counter()
-		deploy_output = _predict_deployed(x_test_raw, endpoint_url=config.deploy_endpoint_url)
-		inference_seconds = time.perf_counter() - start
+    start = time.perf_counter()
+    deploy_output = _predict_deployed(
+        x_test_raw, endpoint_url=config.deploy_endpoint_url
+    )
+    inference_seconds = time.perf_counter() - start
 
-		y_pred = deploy_output["predictions"]
-		y_proba = deploy_output.get("probabilities")
+    y_pred = deploy_output["predictions"]
+    y_proba = deploy_output.get("probabilities")
 
-		metrics = summarize_classification(y_test, y_pred, y_proba)
-		metrics_table = _build_classification_report_table(metrics)
+    metrics = summarize_classification(y_test, y_pred, y_proba)
+    metrics_table = _build_classification_report_table(metrics)
 
-		summary_csv_path = output_dir / "deployed_model_metrics.csv"
-		metrics_table.to_csv(summary_csv_path, index=False)
+    summary_csv_path = output_dir / "deployed_model_metrics.csv"
+    metrics_table.to_csv(summary_csv_path, index=False)
 
-		fig, ax = plt.subplots(figsize=(6, 5))
-		ConfusionMatrixDisplay.from_predictions(y_test, y_pred, ax=ax)
-		ax.set_title("Matriz de confusión - Modelo desplegado")
-		confusion_matrix_path = output_dir / "deployed_confusion_matrix.png"
-		plt.tight_layout()
-		plt.savefig(confusion_matrix_path, dpi=140)
-		plt.close(fig)
+    fig, ax = plt.subplots(figsize=(6, 5))
+    ConfusionMatrixDisplay.from_predictions(y_test, y_pred, ax=ax)
+    ax.set_title("Matriz de confusión - Modelo desplegado")
+    confusion_matrix_path = output_dir / "deployed_confusion_matrix.png"
+    plt.tight_layout()
+    plt.savefig(confusion_matrix_path, dpi=140)
+    plt.close(fig)
 
-		metadata = {
-				"n_records": len(y_test),
-				"inference_seconds": inference_seconds,
-				"endpoint_used": config.deploy_endpoint_url or "local ModelDeploymentService",
-				"data_path": config.data_path,
-		}
+    metadata = {
+        "n_records": len(y_test),
+        "inference_seconds": inference_seconds,
+        "endpoint_used": config.deploy_endpoint_url or "local ModelDeploymentService",
+        "data_path": config.data_path,
+    }
 
-		metadata_path = output_dir / "evaluation_metadata.json"
-		metadata_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8")
+    metadata_path = output_dir / "evaluation_metadata.json"
+    metadata_path.write_text(
+        json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
-		dashboard_path = output_dir / "metrics_dashboard.html"
-		_render_metrics_tab(
-				output_html=dashboard_path,
-				metrics_table=metrics_table,
-				metadata=metadata,
-				confusion_matrix_path=confusion_matrix_path,
-		)
+    dashboard_path = output_dir / "metrics_dashboard.html"
+    _render_metrics_tab(
+        output_html=dashboard_path,
+        metrics_table=metrics_table,
+        metadata=metadata,
+        confusion_matrix_path=confusion_matrix_path,
+    )
 
-		return {
-				"metrics_csv": str(summary_csv_path),
-				"confusion_matrix": str(confusion_matrix_path),
-				"metadata_json": str(metadata_path),
-				"dashboard_html": str(dashboard_path),
-				"metrics": metrics,
-		}
+    return {
+        "metrics_csv": str(summary_csv_path),
+        "confusion_matrix": str(confusion_matrix_path),
+        "metadata_json": str(metadata_path),
+        "dashboard_html": str(dashboard_path),
+        "metrics": metrics,
+    }
 
 
 if __name__ == "__main__":
-		results = evaluate_deployed_model()
-		print("Evaluación completada")
-		for key, value in results.items():
-				if key == "metrics":
-						continue
-				print(f"- {key}: {value}")
-		print("- metrics:")
-		for metric_name, metric_value in results["metrics"].items():
-				print(f"    {metric_name}: {metric_value:.6f}")
+    results = evaluate_deployed_model()
+    print("Evaluación completada")
+    for key, value in results.items():
+        if key == "metrics":
+            continue
+        print(f"- {key}: {value}")
+    print("- metrics:")
+    for metric_name, metric_value in results["metrics"].items():
+        print(f"    {metric_name}: {metric_value:.6f}")
