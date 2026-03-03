@@ -12,6 +12,7 @@ class ColumnDropper(BaseEstimator, TransformerMixin):
         self.cols_to_drop = cols_to_drop or []
 
     def fit(self, X, y=None):
+        self.n_features_in_ = X.shape[1]
         return self
 
     def transform(self, X):
@@ -23,6 +24,7 @@ class ToCategory(BaseEstimator, TransformerMixin):
         self.cols = cols or []
 
     def fit(self, X, y=None):
+        self.n_features_in_ = X.shape[1]
         return self
 
     def transform(self, X):
@@ -38,6 +40,7 @@ class OutliersToNaN(BaseEstimator, TransformerMixin):
         self.bounds = bounds or {}
 
     def fit(self, X, y=None):
+        self.n_features_in_ = X.shape[1]
         return self
 
     def transform(self, X):
@@ -52,13 +55,13 @@ class KNNColumnImputer(BaseEstimator, TransformerMixin):
     def __init__(self, cols=None, n_neighbors=5):
         self.cols = cols or []
         self.n_neighbors = n_neighbors
-        self._existing_cols = []
-        self._scaler = StandardScaler()
-        self._imputer = KNNImputer(n_neighbors=n_neighbors)
 
     def fit(self, X, y=None):
+        self.n_features_in_ = X.shape[1]
         self._existing_cols = [col for col in self.cols if col in X.columns]
         if self._existing_cols:
+            self._scaler = StandardScaler()
+            self._imputer = KNNImputer(n_neighbors=self.n_neighbors)
             scaled = self._scaler.fit_transform(X[self._existing_cols])
             self._imputer.fit(scaled)
         return self
@@ -82,6 +85,7 @@ class KNNColumnImputer(BaseEstimator, TransformerMixin):
 
 class DerivedFeatures(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
+        self.n_features_in_ = X.shape[1]
         return self
 
     def transform(self, X):
@@ -136,13 +140,11 @@ class DerivedFeatures(BaseEstimator, TransformerMixin):
 
 class AutoPreprocessorToDF(BaseEstimator, TransformerMixin):
     def __init__(self):
-        self.numeric_features = []
-        self.categorical_features = []
-        self.ct_ = None
+        pass  # no instance attributes here — sklearn cloning requires clean __init__
 
     def fit(self, X, y=None):
-        self.numeric_features = X.select_dtypes(include=["number"]).columns.tolist()
-        self.categorical_features = X.select_dtypes(exclude=["number"]).columns.tolist()
+        self.numeric_features_ = X.select_dtypes(include=["number"]).columns.tolist()
+        self.categorical_features_ = X.select_dtypes(exclude=["number"]).columns.tolist()
 
         try:
             ohe = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
@@ -151,8 +153,8 @@ class AutoPreprocessorToDF(BaseEstimator, TransformerMixin):
 
         self.ct_ = ColumnTransformer(
             transformers=[
-                ("num", StandardScaler(), self.numeric_features),
-                ("cat", ohe, self.categorical_features),
+                ("num", StandardScaler(), self.numeric_features_),
+                ("cat", ohe, self.categorical_features_),
             ],
             remainder="drop",
         )
@@ -165,13 +167,14 @@ class AutoPreprocessorToDF(BaseEstimator, TransformerMixin):
         return pd.DataFrame(Xt, columns=feature_names, index=X.index)
 
 
+
 COLUMNS_TO_DROP = [
     "fecha_prestamo",
     "tendencia_ingresos",
     "promedio_ingresos_datacredito",
 ]
 
-CATEGORY_COLUMNS = ["tipo_credito", "Pago_atiempo"]
+CATEGORY_COLUMNS = ["tipo_credito"] 
 
 OUTLIER_BOUNDS = {
     "edad_cliente": (18, 80),

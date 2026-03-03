@@ -1,0 +1,2 @@
+run_at_utc,n_samples,scoring_seconds,accuracy,precision,recall,f1,balanced_accuracy,roc_auc
+2026-03-03T04:22:22.859665+00:00,500,0.0607509003020823,1.0,1.0,1.0,1.0,1.0,1.0
