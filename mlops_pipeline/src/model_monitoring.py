@@ -30,10 +30,49 @@ class MonitoringConfig:
 
 
 def _utc_now_iso() -> str:
+    """Return current UTC time as an ISO 8601 formatted string.
+
+    Returns:
+        str: Current UTC datetime in ISO 8601 format with timezone offset,
+            e.g. "2026-03-05T12:34:56.789012+00:00".
+
+    Example:
+        >>> isinstance(_utc_now_iso(), str)
+        True
+    """
     return datetime.now(timezone.utc).isoformat()
 
 
 def _psi_numeric(expected: pd.Series, actual: pd.Series, bins: int = 10) -> float:
+    """Compute Population Stability Index (PSI) between two numeric series.
+
+    The function bins `expected` into quantile-based cut points (default `bins=10`),
+    computes the proportion of observations in each bin for both `expected` and
+    `actual`, applies a small epsilon to avoid division-by-zero, and returns the
+    PSI defined as sum((actual_ratio - expected_ratio) * log(actual_ratio / expected_ratio)).
+
+    Args:
+        expected (pd.Series): Reference / baseline numeric series. Non-numeric values
+            will be coerced to numeric and dropped.
+        actual (pd.Series): Current / monitoring numeric series. Non-numeric values
+            will be coerced to numeric and dropped.
+        bins (int, optional): Number of quantile bins to use when computing cut points.
+            Defaults to 10.
+
+    Returns:
+        float: PSI value (>= 0). Returns `np.nan` if either series has no valid numeric
+            values after coercion. Returns `0.0` when there are insufficient unique
+            cut points to form meaningful bins.
+
+    Raises:
+        None
+
+    Example:
+        >>> exp = pd.Series([1, 2, 3, 4, 5])
+        >>> act = pd.Series([1, 2, 2, 4, 6])
+        >>> _psi_numeric(exp, act)  # doctest: +SKIP
+        0.0
+    """
     expected = pd.to_numeric(expected, errors="coerce").dropna()
     actual = pd.to_numeric(actual, errors="coerce").dropna()
 
@@ -61,6 +100,31 @@ def _psi_numeric(expected: pd.Series, actual: pd.Series, bins: int = 10) -> floa
 
 
 def _psi_categorical(expected: pd.Series, actual: pd.Series) -> float:
+    """Compute Population Stability Index (PSI) between two categorical series.
+
+    The function computes PSI by comparing the category frequency distributions of
+    `expected` (reference) and `actual` (current) series. Missing values are
+    treated as the string "<NA>" and categories present in either series are
+    included. A small epsilon is applied to frequencies to avoid division by zero
+    and log-of-zero issues.
+
+    Args:
+        expected (pd.Series): Reference / baseline categorical series.
+        actual (pd.Series): Current / monitoring categorical series.
+
+    Returns:
+        float: PSI value (non-negative). Returns np.nan if there are no categories
+            to compare.
+
+    Raises:
+        None
+
+    Example:
+        >>> expected = pd.Series(["a", "b", "a", None])
+        >>> actual = pd.Series(["a", "b", "c"])
+        >>> _psi_categorical(expected, actual)  # doctest: +SKIP
+        0.????  # numeric PSI value
+    """
     expected = expected.astype("string").fillna("<NA>")
     actual = actual.astype("string").fillna("<NA>")
 
@@ -87,6 +151,37 @@ def _psi_categorical(expected: pd.Series, actual: pd.Series) -> float:
 def _compute_drift_table(
     reference_df: pd.DataFrame, current_df: pd.DataFrame
 ) -> pd.DataFrame:
+    """Compute population stability index (PSI) per feature between reference and current data.
+
+    Calculates a PSI value for each column present in both dataframes. Numeric
+    features are compared using histogram-based binning via _psi_numeric, while
+    non-numeric features use category frequency comparison via _psi_categorical.
+    The returned table contains one row per feature with its type, computed PSI
+    and a boolean drift_flag (True when PSI >= 0.2).
+
+    Args:
+        reference_df (pd.DataFrame): Reference / baseline dataframe used as the
+            expected distribution.
+        current_df (pd.DataFrame): Current / monitoring dataframe to compare
+            against the reference distribution.
+
+    Returns:
+        pd.DataFrame: DataFrame with columns:
+            - feature (str): feature name
+            - feature_type (str): "numeric" or "categorical"
+            - psi (float): population stability index (NaN if not computable)
+            - drift_flag (bool): True if psi >= 0.2, False otherwise
+
+        The DataFrame is sorted by "psi" in descending order, with NaN values
+        placed last.
+
+    Example:
+        >>> ref = pd.DataFrame({"age": [20, 30, 40], "cat": ["a", "b", "a"]})
+        >>> cur = pd.DataFrame({"age": [22, 35, 41], "cat": ["a", "b", "c"]})
+        >>> table = _compute_drift_table(ref, cur)
+        >>> table.columns
+        Index(['feature', 'feature_type', 'psi', 'drift_flag'], dtype='object')
+    """
     rows = []
     common_cols = [col for col in reference_df.columns if col in current_df.columns]
 
@@ -114,6 +209,26 @@ def _compute_drift_table(
 
 
 def _call_endpoint(endpoint_url: str, records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Send a JSON POST request with records to a prediction endpoint and return the parsed JSON response.
+
+    Args:
+        endpoint_url (str): Full URL of the prediction endpoint (e.g. "http://host:port/predict").
+        records (List[Dict[str, Any]]): List of input records to include in the request body under the
+            "records" key (one dict per sample).
+
+    Returns:
+        Dict[str, Any]: Parsed JSON response returned by the endpoint.
+
+    Raises:
+        urllib.error.URLError: If a network-related error occurs when opening the URL.
+        urllib.error.HTTPError: If the server returns an HTTP error status.
+        json.JSONDecodeError: If the response body cannot be decoded as valid JSON.
+        Exception: Propagates any other unexpected exceptions raised during the request/response handling.
+
+    Example:
+        >>> resp = _call_endpoint("http://localhost:8000/predict", [{"saldo_principal": 1000}])
+        >>> resp.get("predictions")
+    """
     payload = json.dumps({"records": records}).encode("utf-8")
     request = urllib.request.Request(
         endpoint_url,
@@ -131,6 +246,33 @@ def _predict_with_deploy(
     records: List[Dict[str, Any]],
     deploy_endpoint_url: Optional[str],
 ) -> Tuple[List[int], Optional[List[float]], str]:
+    """Predict using a remote endpoint if available, otherwise fallback to the local service.
+
+    Attempts to POST the provided records to the given deploy endpoint. If the call
+    succeeds the function returns the endpoint predictions and probabilities and the
+    source flag 'endpoint'. If a network error or timeout occurs, the function falls
+    back to the local ModelDeploymentService and returns its predictions and the
+    source flag 'local_service'.
+
+    Args:
+        records (List[Dict[str, Any]]): List of input records to score (one dict per sample).
+        deploy_endpoint_url (Optional[str]): Full URL of the deployed prediction endpoint.
+            If None, the function will always use the local ModelDeploymentService.
+
+    Returns:
+        Tuple[List[int], Optional[List[float]], str]:
+            - predictions: List[int] of predicted class labels.
+            - probabilities: Optional[List[float]] of predicted probabilities (or None).
+            - source: str indicating the prediction source: 'endpoint' or 'local_service'.
+
+    Raises:
+        Exception: Any unexpected exception raised by the local ModelDeploymentService or
+            by the endpoint call that is not explicitly caught will propagate.
+
+    Example:
+        >>> records = [{"saldo_principal": 1000, "edad_cliente": 30}, {"saldo_principal": 500, "edad_cliente": 45}]
+        >>> preds, probs, src = _predict_with_deploy(records, "http://localhost:8000/predict")
+    """
     if deploy_endpoint_url:
         try:
             payload = _call_endpoint(deploy_endpoint_url, records)
@@ -144,6 +286,27 @@ def _predict_with_deploy(
 
 
 def _append_csv(df: pd.DataFrame, csv_path: Path) -> None:
+    """Append a DataFrame to a CSV file, creating parent directories when needed.
+
+    If `csv_path` exists the dataframe is appended without writing a header.
+    If it does not exist the dataframe is written including the header row.
+
+    Args:
+        df (pd.DataFrame): DataFrame to write or append to CSV.
+        csv_path (Path): Destination path for the CSV file.
+
+    Returns:
+        None
+
+    Raises:
+        OSError: If the parent directory cannot be created.
+        ValueError: If `df` is not a pandas DataFrame.
+
+    Example:
+        >>> from pathlib import Path
+        >>> df = pd.DataFrame({"a": [1, 2]})
+        >>> _append_csv(df, Path("artifacts/monitoring/prediction_log.csv"))
+    """
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     if csv_path.exists():
         df.to_csv(csv_path, mode="a", header=False, index=False)
@@ -158,6 +321,40 @@ def _build_prediction_log(
     source: str,
     target_col: str,
 ) -> pd.DataFrame:
+    """Create a prediction log DataFrame by combining inputs with model outputs.
+
+    The returned DataFrame is a copy of `input_df` augmented with the model's
+    prediction results and metadata useful for monitoring and auditing.
+
+    Args:
+        input_df (pd.DataFrame): Input features DataFrame used for scoring. May
+            include the true target column.
+        predictions (List[int]): Sequence of predicted class labels, aligned
+            with the rows of `input_df`.
+        probabilities (Optional[List[float]]): Sequence of predicted probabilities
+            aligned with `predictions`, or None if not available.
+        source (str): Identifier of the prediction source (e.g. 'endpoint',
+            'local_service').
+        target_col (str): Name of the target column in `input_df`. If present,
+            its values are copied into the 'observed_target' column.
+
+    Returns:
+        pd.DataFrame: Copy of `input_df` with the following added columns:
+            - prediction (int): model predicted label
+            - prediction_probability (float): predicted probability or NaN
+            - observed_target (int or NaN): value from `target_col` if present
+            - prediction_source (str): value of `source`
+            - scored_at_utc (str): ISO8601 UTC timestamp when log was built
+
+    Raises:
+        None
+
+    Example:
+        >>> df = pd.DataFrame({"x":[1,2], "Pago_atiempo":[1,0]})
+        >>> log = _build_prediction_log(df, [1,0], [0.9, 0.2], "local", "Pago_atiempo")
+        >>> "prediction" in log.columns
+        True
+    """
     log_df = input_df.copy()
     log_df["prediction"] = predictions
     if probabilities is not None:
@@ -178,6 +375,36 @@ def _build_prediction_log(
 def _compute_performance_if_available(
     log_df: pd.DataFrame,
 ) -> Optional[Dict[str, float]]:
+    """Compute classification performance metrics when ground truth is available.
+
+    This function extracts rows from `log_df` that contain an observed target
+    value and computes classification metrics using `summarize_classification`.
+    If no rows contain an observed target the function returns None.
+
+    Args:
+        log_df (pd.DataFrame): Prediction log produced by `_build_prediction_log`.
+            Expected columns:
+              - "observed_target" (may contain NaN for unlabeled rows)
+              - "prediction" (model predicted labels)
+              - "prediction_probability" (optional; may contain NaN)
+
+    Returns:
+        Optional[Dict[str, float]]: Dictionary of classification metrics as returned
+        by `summarize_classification` (for example accuracy, precision, recall,
+        f1, roc_auc). Returns None when there are no labeled rows to evaluate.
+
+    Raises:
+        None
+
+    Example:
+        >>> df = pd.DataFrame({
+        ...     "observed_target": [1, 0, 1],
+        ...     "prediction": [1, 0, 0],
+        ...     "prediction_probability": [0.9, 0.2, 0.6],
+        ... })
+        >>> _compute_performance_if_available(df)  # doctest: +SKIP
+        {'accuracy': 0.666..., 'precision': ..., 'recall': ..., 'f1': ..., 'roc_auc': ...}
+    """
     valid = log_df.dropna(subset=["observed_target"])
     if valid.empty:
         return None
@@ -196,6 +423,54 @@ def _compute_performance_if_available(
 def run_monitoring_cycle(
     config: MonitoringConfig = MonitoringConfig(),
 ) -> Dict[str, Any]:
+    """Execute a single monitoring cycle: score a sample, compute drift and performance, and persist artifacts.
+
+    This function performs a full monitoring run:
+    1. Loads the dataset from `config.data_path`.
+    2. Splits features/target and creates a baseline and a monitoring sample.
+    3. Scores the monitoring sample using the deployed endpoint (if configured)
+       or the local ModelDeploymentService.
+    4. Builds and appends a prediction log CSV.
+    5. Computes per-feature PSI drift and appends a drift CSV.
+    6. Computes performance metrics if ground truth is available and appends a performance CSV.
+    7. Writes a JSON summary of the run to `config.monitor_dir`.
+
+    Args:
+        config (MonitoringConfig): Monitoring configuration. Fields used include:
+            - data_path (str): Path to the source data file.
+            - target_col (str): Name of the target column.
+            - monitor_dir (str): Directory where artifacts are written.
+            - deploy_endpoint_url (Optional[str]): Endpoint URL to call for predictions.
+            - baseline_sample_size (int): Number of baseline records to sample.
+            - monitor_sample_size (int): Number of current records to sample.
+            - period_seconds (int): Period used by the periodic runner (not used here).
+
+    Returns:
+        Dict[str, Any]: Summary dictionary with at least the following keys:
+            - run_at_utc (str): ISO8601 UTC timestamp of the run.
+            - n_records_scored (int): Number of records scored.
+            - prediction_log (str): Path to prediction_log.csv.
+            - drift_metrics (str): Path to drift_metrics.csv.
+            - performance_metrics (str): Path to performance_metrics.csv.
+            - scoring_seconds (float): Time spent scoring (seconds).
+            - drift_alert_features (int): Number of features flagged with drift.
+
+    Raises:
+        FileNotFoundError: If `config.data_path` does not exist or cannot be read.
+        IOError: If writing artifact files fails (disk/permissions).
+        Exception: Propagates unexpected errors from scoring, endpoint calls, or utilities.
+
+    Side effects:
+        - Reads `config.data_path`.
+        - Writes artifacts under `config.monitor_dir`:
+            prediction_log.csv, drift_metrics.csv, performance_metrics.csv, latest_run_summary.json
+
+    Example:
+        >>> cfg = MonitoringConfig(data_path="Base_de_datos.xlsx", monitor_dir="artifacts/monitoring")
+        >>> summary = run_monitoring_cycle(cfg)
+        >>> isinstance(summary, dict)
+        True
+    """
     monitor_dir = Path(config.monitor_dir)
     monitor_dir.mkdir(parents=True, exist_ok=True)
 
@@ -282,6 +557,34 @@ def run_periodic_monitoring(
     config: MonitoringConfig = MonitoringConfig(),
     n_cycles: int = 3,
 ) -> List[Dict[str, Any]]:
+    """Run the monitoring cycle repeatedly with a delay between runs.
+
+    This helper runs `run_monitoring_cycle` `n_cycles` times, waits
+    `config.period_seconds` between runs (except after the last run), and
+    collects the per-run summaries into a list. Each summary is augmented with
+    a "cycle" key indicating the run index (1-based).
+
+    Args:
+        config (MonitoringConfig): Monitoring configuration to use for each cycle.
+            See `MonitoringConfig` for available fields (data_path, monitor_dir,
+            baseline_sample_size, monitor_sample_size, deploy_endpoint_url, etc.).
+        n_cycles (int): Number of monitoring cycles to execute. Defaults to 3.
+
+    Returns:
+        List[Dict[str, Any]]: List of run summary dictionaries returned by
+        `run_monitoring_cycle`. Each dict contains the original summary keys and
+        an additional "cycle" key with the 1-based cycle number.
+
+    Raises:
+        Exception: Propagates exceptions raised by `run_monitoring_cycle` or by
+        `time.sleep` (e.g., KeyboardInterrupt).
+
+    Example:
+        >>> cfg = MonitoringConfig(monitor_dir="artifacts/monitoring", baseline_sample_size=100, monitor_sample_size=10)
+        >>> results = run_periodic_monitoring(cfg, n_cycles=2)
+        >>> isinstance(results, list) and len(results) == 2
+        True
+    """
     results = []
     for cycle in range(n_cycles):
         result = run_monitoring_cycle(config=config)

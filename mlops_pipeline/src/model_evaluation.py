@@ -30,6 +30,32 @@ class EvaluationConfig:
 def _post_batch_prediction(
     endpoint_url: str, records: List[Dict[str, Any]]
 ) -> Dict[str, Any]:
+    """Send a batch of records to a prediction endpoint and return the parsed JSON response.
+
+    Sends an HTTP POST request with a JSON body of the form {"records": records}
+    to the specified endpoint and returns the decoded JSON response.
+
+    Args:
+        endpoint_url (str): Full URL of the prediction endpoint (for example
+            "http://host:port/predict").
+        records (List[Dict[str, Any]]): Sequence of input records to score (one
+            dictionary per sample).
+
+    Returns:
+        Dict[str, Any]: Parsed JSON response returned by the endpoint.
+
+    Raises:
+        urllib.error.URLError: If a network-related error occurs when opening the URL.
+        urllib.error.HTTPError: If the server returns an HTTP error status.
+        json.JSONDecodeError: If the response body cannot be decoded as JSON.
+        Exception: Any other unexpected exceptions raised during request/response handling
+            will propagate.
+
+    Example:
+        >>> resp = _post_batch_prediction("http://localhost:8000/predict", [{"saldo": 1000}])
+        >>> isinstance(resp, dict)
+        True
+    """
     payload = json.dumps({"records": records}).encode("utf-8")
     request = urllib.request.Request(
         endpoint_url,
@@ -47,6 +73,35 @@ def _predict_deployed(
     x_test_raw: pd.DataFrame,
     endpoint_url: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """Obtain predictions for a batch of inputs from a deployed endpoint or local service.
+
+    The function attempts to POST the batch of records (converted from `x_test_raw`)
+    to the provided `endpoint_url`. If the network call fails (URLError, HTTPError,
+    timeout) the function falls back to the local ModelDeploymentService.
+
+    Args:
+        x_test_raw (pd.DataFrame): DataFrame of input features to score (one row per sample).
+        endpoint_url (Optional[str]): Full URL of the remote prediction endpoint (for example
+            "http://host:port/predict"). If None, the function will use the local service.
+
+    Returns:
+        Dict[str, Any]: Parsed prediction payload. Expected keys include:
+            - "predictions" (List[int]): Predicted class labels.
+            - "probabilities" (Optional[List[float]]): Predicted probabilities if provided.
+            - additional fields returned by the endpoint/service.
+
+    Raises:
+        urllib.error.URLError: If a network-level error occurs while calling the endpoint and
+            no successful fallback is possible.
+        urllib.error.HTTPError: If the endpoint returns an HTTP error and no successful
+            fallback is possible.
+        Exception: Propagates any unexpected errors raised by the local ModelDeploymentService.
+
+    Example:
+        >>> resp = _predict_deployed(pd.DataFrame([{"x":1}, {"x":2}]), endpoint_url="http://localhost:8000/predict")
+        >>> isinstance(resp, dict)
+        True
+    """
     records = x_test_raw.to_dict(orient="records")
 
     if endpoint_url:
@@ -61,6 +116,33 @@ def _predict_deployed(
 
 
 def _build_classification_report_table(metrics: Dict[str, float]) -> pd.DataFrame:
+    """Build a two-column DataFrame summarizing classification metrics.
+
+    The function converts a metrics mapping into a small DataFrame suitable for
+    reporting or display. It preserves a stable metric order used by the
+    evaluation dashboard.
+
+    Args:
+        metrics (Dict[str, float]): Mapping from metric name to numeric value.
+            Expected keys include (but are not required): 'accuracy', 'precision',
+            'recall', 'f1', 'balanced_accuracy', 'roc_auc'. Missing keys will
+            result in None values in the output table.
+
+    Returns:
+        pd.DataFrame: DataFrame with columns:
+            - metric (str): Metric name (ordered as accuracy, precision, recall,
+              f1, balanced_accuracy, roc_auc).
+            - value (Optional[float]): Corresponding metric value or None.
+
+    Raises:
+        None
+
+    Example:
+        >>> metrics = {'accuracy': 0.9, 'precision': 0.8, 'recall': 0.7, 'f1': 0.75, 'balanced_accuracy': 0.85, 'roc_auc': 0.88}
+        >>> df = _build_classification_report_table(metrics)
+        >>> list(df['metric'])
+        ['accuracy', 'precision', 'recall', 'f1', 'balanced_accuracy', 'roc_auc']
+    """
     return pd.DataFrame(
         {
             "metric": [
@@ -89,6 +171,33 @@ def _render_metrics_tab(
     metadata: Dict[str, Any],
     confusion_matrix_path: Path,
 ) -> None:
+    """Render an HTML evaluation dashboard with metrics and confusion matrix.
+
+    Generates a self-contained HTML page that displays a table with evaluation
+    metrics and an embedded confusion matrix image. The produced file is written
+    to `output_html`.
+
+    Args:
+        output_html (Path): Destination path for the generated HTML file.
+        metrics_table (pd.DataFrame): Two-column DataFrame containing the metrics,
+            expected columns are 'metric' and 'value'.
+        metadata (Dict[str, Any]): Metadata to display in the dashboard. Expected
+            keys include 'n_records', 'inference_seconds', 'endpoint_used',
+            and 'data_path'.
+        confusion_matrix_path (Path): Path to the confusion matrix image file.
+            The image filename (not full path) is referenced from the HTML.
+
+    Returns:
+        None: The function writes the HTML content to `output_html`.
+
+    Raises:
+        OSError: If writing to `output_html` fails due to filesystem errors.
+
+    Example:
+        >>> metrics_table = pd.DataFrame({"metric":["accuracy"], "value":[0.9]})
+        >>> metadata = {"n_records":100, "inference_seconds":0.12, "endpoint_used":"local", "data_path":"Base_de_datos.xlsx"}
+        >>> _render_metrics_tab(Path("out.html"), metrics_table, metadata, Path("confusion.png"))
+    """
     metrics_rows = "\n".join(
         [
             f"<tr><td>{row.metric}</td><td>{row.value:.6f}</td></tr>"
@@ -169,6 +278,45 @@ def _render_metrics_tab(
 def evaluate_deployed_model(
     config: EvaluationConfig = EvaluationConfig(),
 ) -> Dict[str, Any]:
+    """Evaluate the deployed model on a test split and produce evaluation artifacts.
+
+    This function loads the dataset specified in `config.data_path`, creates a test
+    split (using `config.test_size` and the global RANDOM_STATE), obtains predictions
+    from the deployed endpoint (or the local ModelDeploymentService when the endpoint
+    is not reachable), computes classification metrics and a confusion matrix, and
+    writes evaluation artifacts to `config.output_dir`. A small HTML dashboard is
+    also generated that embeds the metrics table and confusion matrix image.
+
+    Args:
+        config (EvaluationConfig): Evaluation configuration. Relevant fields:
+            - data_path (str): Path to the dataset file.
+            - output_dir (str): Directory where evaluation artifacts will be saved.
+            - target_col (str): Name of the target column.
+            - test_size (float): Fraction for the test split.
+            - deploy_endpoint_url (Optional[str]): Optional prediction endpoint URL.
+
+    Returns:
+        Dict[str, Any]: Summary dictionary containing:
+            - "metrics_csv" (str): Path to CSV with metric table.
+            - "confusion_matrix" (str): Path to confusion matrix PNG.
+            - "metadata_json" (str): Path to JSON with metadata about the run.
+            - "dashboard_html" (str): Path to generated HTML dashboard.
+            - "metrics" (Dict[str, float]): Computed metric values.
+
+    Raises:
+        FileNotFoundError: If `config.data_path` cannot be found/read.
+        urllib.error.URLError: If calling the remote endpoint fails at network level
+            and no fallback is possible.
+        urllib.error.HTTPError: If the remote endpoint returns an HTTP error and
+            no fallback is possible.
+        Exception: Propagates unexpected errors from plotting, serialization, or the
+            local deployment service.
+
+    Example:
+        >>> cfg = EvaluationConfig(data_path="Base_de_datos.xlsx", output_dir="artifacts/eval")
+        >>> result = evaluate_deployed_model(cfg)
+        >>> assert "metrics_csv" in result and "dashboard_html" in result
+    """
     output_dir = Path(config.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 

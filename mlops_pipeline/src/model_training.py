@@ -29,6 +29,31 @@ RANDOM_STATE = 42
 
 
 class HeuristicModel(BaseEstimator, ClassifierMixin):
+    """Simple rule-based classifier implemented as an sklearn estimator.
+
+    The model applies a set of hand-crafted rules on derived numeric features
+    (for example credit score, debt-to-income ratio, past-due balance) to
+    decide a binary label. Designed to be used inside the same pipeline
+    produced by build_model so that it receives preprocessed feature names.
+
+    Args:
+        puntaje_threshold (float): Threshold for the credit score-like feature.
+        deuda_ingreso_threshold (float): Threshold for debt-to-income ratio.
+        carga_pago_threshold (float): Threshold for monthly payment load.
+        mora_threshold (float): Threshold for past-due balance.
+
+    Attributes:
+        classes_ (np.ndarray): Unique class labels seen during fit (if y provided).
+        col_* (str): Resolved column names used by the heuristic after fit.
+
+    Example:
+        >>> from ft_engineering import pipeline_ml
+        >>> svc = HeuristicModel()
+        >>> svc.fit(pd.DataFrame({"puntaje_datacredito":[-1], "saldo_mora":[0]}))
+        >>> svc.predict(pd.DataFrame({"puntaje_datacredito":[-1], "saldo_mora":[0]}))
+        array([0])
+    """
+
     def __init__(
         self,
         puntaje_threshold: float = -0.4,
@@ -89,6 +114,29 @@ def summarize_classification(
     y_pred: np.ndarray,
     y_proba: Optional[np.ndarray] = None,
 ) -> Dict[str, float]:
+    """Compute common classification metrics from predictions and (optional) scores.
+
+    The function returns a dictionary with accuracy, precision, recall, f1-score,
+    balanced accuracy and (when probabilities are provided) ROC AUC.
+
+    Args:
+        y_true (pd.Series): True binary labels.
+        y_pred (np.ndarray): Predicted binary labels.
+        y_proba (Optional[np.ndarray]): Predicted probability / score for the positive class.
+
+    Returns:
+        Dict[str, float]: Mapping with keys:
+            - "accuracy", "precision", "recall", "f1", "balanced_accuracy", "roc_auc".
+
+            If y_proba is None the "roc_auc" value will be np.nan.
+
+    Raises:
+        None
+
+    Example:
+        >>> summarize_classification(pd.Series([1,0]), np.array([1,0]), np.array([0.9,0.1]))
+        {'accuracy': 1.0, 'precision': 1.0, 'recall': 1.0, 'f1': 1.0, 'balanced_accuracy': 1.0, 'roc_auc': 1.0}
+    """
     summary = {
         "accuracy": accuracy_score(y_true, y_pred),
         "precision": precision_score(y_true, y_pred, zero_division=0),
@@ -106,6 +154,22 @@ def summarize_classification(
 
 
 def build_model(estimator: BaseEstimator) -> Pipeline:
+    """Compose the feature pipeline with a final estimator into a sklearn Pipeline.
+
+    The returned pipeline clones the global pipeline_ml instance and attaches the
+    provided estimator as the final step. This ensures each candidate receives a
+    fresh, independent feature-preprocessing pipeline.
+
+    Args:
+        estimator (BaseEstimator): Final estimator implementing fit/predict.
+
+    Returns:
+        sklearn.pipeline.Pipeline: New pipeline instance combining preprocessing and estimator.
+
+    Example:
+        >>> build_model(RandomForestClassifier())
+        Pipeline(...)
+    """
     return Pipeline(
         steps=[
             ("features", clone(pipeline_ml)),
@@ -116,12 +180,37 @@ def build_model(estimator: BaseEstimator) -> Pipeline:
 
 @dataclass
 class TrainingResult:
+    """Container for the result of the training and model selection run.
+
+    Attributes:
+        best_model_name (str): Name identifier of the selected best model.
+        best_model_pipeline (Pipeline): Fitted sklearn Pipeline for the best model.
+        summary_table (pd.DataFrame): DataFrame summarizing evaluation results for candidates.
+    """
+
     best_model_name: str
     best_model_pipeline: Pipeline
     summary_table: pd.DataFrame
 
 
 def _score_for_selection(row: pd.Series) -> float:
+    """Compute a composite selection score used to rank model candidates.
+
+    The function combines test F1 (performance), CV F1 standard deviation
+    (stability/consistency) and mean CV fit time (scalability) into a single
+    scalar used for model selection.
+
+    Args:
+        row (pd.Series): Row from the summary table containing keys:
+            - "test_f1", "cv_f1_std", "cv_fit_time_mean"
+
+    Returns:
+        float: Composite score (higher is better).
+
+    Example:
+        >>> _score_for_selection(pd.Series({"test_f1":0.8,"cv_f1_std":0.1,"cv_fit_time_mean":0.2}))
+        0.60*0.8 + 0.25*(1/(1+0.1)) + 0.15*(1/(1+0.2))
+    """
     performance = row["test_f1"]
     consistency = 1 / (1 + row["cv_f1_std"])
     scalability = 1 / (1 + row["cv_fit_time_mean"])
@@ -129,6 +218,18 @@ def _score_for_selection(row: pd.Series) -> float:
 
 
 def _get_model_candidates() -> Dict[str, BaseEstimator]:
+    """Return a mapping of candidate model names to estimator instances.
+
+    The candidates dictionary contains short string keys identifying each model
+    and the corresponding sklearn-compatible estimator (or custom estimator).
+
+    Returns:
+        Dict[str, BaseEstimator]: Candidate estimators keyed by name.
+
+    Example:
+        >>> list(_get_model_candidates().keys())
+        ['heuristic', 'logistic_regression', 'random_forest']
+    """
     return {
         "heuristic": HeuristicModel(),
         "logistic_regression": LogisticRegression(
@@ -155,6 +256,35 @@ def _evaluate_candidate(
     y_test: pd.Series,
     cv: KFold,
 ) -> Dict[str, float]:
+    """Evaluate a single candidate model with cross-validation and test-set metrics.
+
+    The function trains a pipeline built with the provided estimator, runs
+    cross-validation on the training set to collect CV metrics and fit times,
+    fits on the full training set, and computes test-set performance.
+
+    Args:
+        model_name (str): Identifier for the candidate model.
+        estimator (BaseEstimator): Estimator instance to evaluate.
+        x_train_raw (pd.DataFrame): Training features (raw).
+        y_train (pd.Series): Training labels.
+        x_test_raw (pd.DataFrame): Test features (raw).
+        y_test (pd.Series): Test labels.
+        cv (KFold): Cross-validation splitter.
+
+    Returns:
+        Dict[str, float]: Dictionary containing aggregated CV statistics and test metrics.
+            Keys include:
+            - model, cv_accuracy_mean, cv_precision_mean, cv_recall_mean, cv_f1_mean,
+              cv_f1_std, cv_fit_time_mean, test_accuracy, test_precision, test_recall,
+              test_f1, test_balanced_accuracy, test_roc_auc, selection_score.
+
+    Raises:
+        Exception: Propagates exceptions from fitting or scoring.
+
+    Example:
+        >>> _evaluate_candidate("heuristic", HeuristicModel(), X_train, y_train, X_test, y_test, KFold(3))
+        {'model': 'heuristic', 'cv_accuracy_mean': ..., ... }
+    """
     model_pipeline = build_model(estimator)
     scoring = ["accuracy", "precision", "recall", "f1"]
 
@@ -230,6 +360,32 @@ def train_and_select_model(
     data_path: str = "Base_de_datos.xlsx",
     output_dir: str = "artifacts",
 ) -> TrainingResult:
+    """Train candidate models, compare them and persist the selected best pipeline.
+
+    Steps performed:
+      1. Load data from `data_path`.
+      2. Split into train/test.
+      3. For each candidate: run cross-validation on train, fit and evaluate on test.
+      4. Rank candidates by a composite selection score and persist artifacts:
+         model_summary.csv, model_comparison.png and best_model.joblib.
+
+    Args:
+        data_path (str): Path to the input Excel dataset.
+        output_dir (str): Directory where artifacts will be written.
+
+    Returns:
+        TrainingResult: Dataclass with best_model_name, fitted best_model_pipeline,
+            and summary_table DataFrame sorted by selection score.
+
+    Raises:
+        FileNotFoundError: If `data_path` cannot be read by pandas.
+        Exception: Propagates unexpected errors from training, plotting, or joblib.
+
+    Example:
+        >>> res = train_and_select_model("Base_de_datos.xlsx", "artifacts")
+        >>> isinstance(res.summary_table, pd.DataFrame)
+        True
+    """
     df = pd.read_excel(data_path)
     x_features_raw, y_target = split_features_target(df, target_col="Pago_atiempo")
     y_target = y_target.astype(int)
