@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -7,6 +9,21 @@ import joblib
 import pandas as pd
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+
+# ── Import the module that owns the custom classes BEFORE any joblib.load ──
+# This guarantees pickle can resolve HeuristicModel, KNNColumnImputer, etc.
+# regardless of which script is __main__.
+import model_training  # noqa: E402  (must be importable from PYTHONPATH)
+import ft_engineering  # noqa: E402
+
+# Patch __main__ so pickle can find classes serialised when model_training
+# was run as __main__ (the common case after `python model_training.py`).
+for _attr in dir(model_training):
+    if not _attr.startswith("__"):
+        setattr(sys.modules["__main__"], _attr, getattr(model_training, _attr))
+for _attr in dir(ft_engineering):
+    if not _attr.startswith("__"):
+        setattr(sys.modules["__main__"], _attr, getattr(ft_engineering, _attr))
 
 
 DEFAULT_MODEL_PATH = Path("artifacts/best_model.joblib")
@@ -70,20 +87,39 @@ class ModelDeploymentService:
         self.model_path = Path(model_path)
         self.model = self._load_model()
 
+    # def _load_model(self):
+    #     """Load and return a joblib-serialized model from disk.
+
+    #     Returns:
+    #         Any: The deserialized model object.
+
+    #     Raises:
+    #         FileNotFoundError: If the model file cannot be found.
+    #         Exception: Propagates exceptions from joblib.load for other I/O or
+    #             deserialization errors.
+    #     """
+    #     if not self.model_path.exists():
+    #         raise FileNotFoundError(
+    #             f"No se encontró el modelo en {self.model_path}. Ejecuta model_training.py primero."
+    #         )
+    #     return joblib.load(self.model_path)
     def _load_model(self):
-        """Load and return a joblib-serialized model from disk.
+        """Load persisted pipeline.
+
+        Custom classes (HeuristicModel, KNNColumnImputer, …) are already
+        available because the module-level patch above registered them on
+        sys.modules['__main__'] before this method is ever called.
 
         Returns:
-            Any: The deserialized model object.
+            Any: Deserialized sklearn Pipeline.
 
         Raises:
             FileNotFoundError: If the model file cannot be found.
-            Exception: Propagates exceptions from joblib.load for other I/O or
-                deserialization errors.
         """
         if not self.model_path.exists():
             raise FileNotFoundError(
-                f"No se encontró el modelo en {self.model_path}. Ejecuta model_training.py primero."
+                f"No se encontró el modelo en {self.model_path}. "
+                "Ejecuta model_training.py primero."
             )
         return joblib.load(self.model_path)
 

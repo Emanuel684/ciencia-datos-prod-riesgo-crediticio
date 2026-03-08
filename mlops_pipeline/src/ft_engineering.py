@@ -7,6 +7,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.utils import resample
 
+
 class TargetBalancer(BaseEstimator, TransformerMixin):
     """Resample X and y to balance class distribution during training.
 
@@ -115,6 +116,7 @@ class TargetBalancer(BaseEstimator, TransformerMixin):
             pd.DataFrame: Unchanged feature matrix.
         """
         return X
+
 
 class ColumnDropper(BaseEstimator, TransformerMixin):
     """Transformer that drops a configured list of columns from a DataFrame.
@@ -400,6 +402,11 @@ COLUMNS_TO_DROP = [
     "fecha_prestamo",
     "tendencia_ingresos",
     "promedio_ingresos_datacredito",
+    "saldo_mora",
+    # "Pago_atiempo",
+    # "dias_mora",
+    # "puntaje_datacredito",
+    "puntaje",
 ]
 
 CATEGORY_COLUMNS = ["tipo_credito"]
@@ -457,14 +464,14 @@ def make_pipeline_ml() -> Pipeline:
             ("to_category", ToCategory(cols=CATEGORY_COLUMNS)),
             ("outliers_to_nan", OutliersToNaN(bounds=OUTLIER_BOUNDS)),
             ("imputation", KNNColumnImputer(cols=IMPUTE_COLUMNS, n_neighbors=5)),
-            ("derived_features", DerivedFeatures()),
+            # ("derived_features", DerivedFeatures()),
         ]
     )
     return Pipeline(
         steps=[
             ("basemodel", base),
             ("preprocessor", AutoPreprocessorToDF()),
-            ("balancer", TargetBalancer(method="oversample", random_state=42)),
+            # ("balancer", TargetBalancer(method="oversample", random_state=42)),
         ]
     )
 

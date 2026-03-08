@@ -103,4 +103,4 @@ Recomendaciones prácticas:
 - Curso: Ciencia de Datos en Producción — Entregable 2
 
 
-comprension_eda > model_monitoring -> model_evaluation -> model_deploy -> model_monitoring
+comprension_eda > model_training -> model_evaluation -> model_deploy -> model_monitoring

@@ -1,9 +1,9 @@
 {
-  "run_at_utc": "2026-03-06T00:51:10.906412+00:00",
+  "run_at_utc": "2026-03-08T23:35:46.752886+00:00",
   "n_records_scored": 500,
   "prediction_log": "artifacts\\monitoring\\prediction_log.csv",
   "drift_metrics": "artifacts\\monitoring\\drift_metrics.csv",
   "performance_metrics": "artifacts\\monitoring\\performance_metrics.csv",
-  "scoring_seconds": 0.050139099825173616,
-  "drift_alert_features": 0
+  "scoring_seconds": 0.04186160024255514,
+  "drift_alert_features": 1
 }

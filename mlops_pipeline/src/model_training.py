@@ -20,6 +20,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from sklearn.model_selection import KFold, cross_validate, train_test_split
+from sklearn.model_selection import StratifiedKFold
 from sklearn.pipeline import Pipeline
 
 from ft_engineering import pipeline_ml, split_features_target
@@ -211,10 +212,12 @@ def _score_for_selection(row: pd.Series) -> float:
         >>> _score_for_selection(pd.Series({"test_f1":0.8,"cv_f1_std":0.1,"cv_fit_time_mean":0.2}))
         0.60*0.8 + 0.25*(1/(1+0.1)) + 0.15*(1/(1+0.2))
     """
-    performance = row["test_f1"]
+    # performance = row["test_f1"]
+    performance = row["cv_f1_mean"]
     consistency = 1 / (1 + row["cv_f1_std"])
     scalability = 1 / (1 + row["cv_fit_time_mean"])
     return 0.60 * performance + 0.25 * consistency + 0.15 * scalability
+    # return  0.25 * consistency + 0.15 * scalability
 
 
 def _get_model_candidates() -> Dict[str, BaseEstimator]:
@@ -254,7 +257,8 @@ def _evaluate_candidate(
     y_train: pd.Series,
     x_test_raw: pd.DataFrame,
     y_test: pd.Series,
-    cv: KFold,
+    # cv: KFold,
+    cv: StratifiedKFold,
 ) -> Dict[str, float]:
     """Evaluate a single candidate model with cross-validation and test-set metrics.
 
@@ -398,7 +402,8 @@ def train_and_select_model(
         random_state=RANDOM_STATE,
     )
 
-    cv = KFold(n_splits=10, shuffle=True, random_state=RANDOM_STATE)
+    # cv = KFold(n_splits=10, shuffle=True, random_state=RANDOM_STATE)
+    cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=RANDOM_STATE)
     candidates = _get_model_candidates()
 
     results = []

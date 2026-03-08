@@ -1,6 +1,6 @@
 {
   "n_records": 2691,
-  "inference_seconds": 0.07192019978538156,
+  "inference_seconds": 0.28271530009806156,
   "endpoint_used": "local ModelDeploymentService",
   "data_path": "Base_de_datos.xlsx"
 }
