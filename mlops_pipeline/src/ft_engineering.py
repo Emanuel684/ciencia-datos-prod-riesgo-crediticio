@@ -5,7 +5,116 @@ from sklearn.compose import ColumnTransformer
 from sklearn.impute import KNNImputer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.utils import resample
 
+class TargetBalancer(BaseEstimator, TransformerMixin):
+    """Resample X and y to balance class distribution during training.
+
+    Uses random under- or over-sampling to equalise the number of samples
+    per class. At transform time the step is a no-op so inference is
+    unaffected.
+
+    Args:
+        method (str): Resampling strategy. One of:
+            - "undersample": reduce the majority class to match the minority.
+            - "oversample": duplicate minority class rows to match the majority.
+        random_state (int): RNG seed for reproducibility.
+
+    Attributes:
+        classes_ (np.ndarray): Unique class labels seen during fit.
+        method (str): Configured resampling strategy.
+        random_state (int): Configured RNG seed.
+
+    Example:
+        >>> X = pd.DataFrame({"a": range(10)})
+        >>> y = pd.Series([0]*9 + [1])
+        >>> bal = TargetBalancer(method="oversample", random_state=42)
+        >>> X_bal, y_bal = bal.fit_resample(X, y)
+        >>> y_bal.value_counts().to_dict()
+        {0: 9, 1: 9}
+    """
+
+    def __init__(self, method: str = "undersample", random_state: int = 42):
+        self.method = method
+        self.random_state = random_state
+
+    def fit(self, X, y=None):
+        """No-op fit; all logic happens in fit_resample.
+
+        Args:
+            X (pd.DataFrame): Feature matrix.
+            y (pd.Series, optional): Target series.
+
+        Returns:
+            TargetBalancer: self.
+        """
+        self.n_features_in_ = X.shape[1]
+        if y is not None:
+            self.classes_ = np.unique(y)
+        return self
+
+    def fit_resample(self, X: pd.DataFrame, y: pd.Series):
+        """Fit and return a rebalanced (X, y) pair.
+
+        Args:
+            X (pd.DataFrame): Feature matrix.
+            y (pd.Series): Target series with binary labels.
+
+        Returns:
+            Tuple[pd.DataFrame, pd.Series]: Balanced feature matrix and target.
+
+        Raises:
+            ValueError: If y contains fewer than 2 unique classes.
+        """
+        self.fit(X, y)
+
+        counts = y.value_counts()
+        if len(counts) < 2:
+            raise ValueError("y must contain at least 2 unique classes to balance.")
+
+        minority_label = counts.idxmin()
+        majority_label = counts.idxmax()
+
+        df = X.copy()
+        df["__target__"] = y.values
+
+        df_min = df[df["__target__"] == minority_label]
+        df_maj = df[df["__target__"] == majority_label]
+
+        if self.method == "undersample":
+            df_maj_resampled = resample(
+                df_maj,
+                replace=False,
+                n_samples=len(df_min),
+                random_state=self.random_state,
+            )
+            df_balanced = pd.concat([df_maj_resampled, df_min])
+        else:  # oversample
+            df_min_resampled = resample(
+                df_min,
+                replace=True,
+                n_samples=len(df_maj),
+                random_state=self.random_state,
+            )
+            df_balanced = pd.concat([df_maj, df_min_resampled])
+
+        df_balanced = df_balanced.sample(
+            frac=1, random_state=self.random_state
+        ).reset_index(drop=True)
+
+        y_balanced = df_balanced.pop("__target__")
+        return df_balanced, y_balanced
+
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        """No-op at inference time; returns X unchanged.
+
+        Args:
+            X (pd.DataFrame): Feature matrix.
+
+        Returns:
+            pd.DataFrame: Unchanged feature matrix.
+        """
+        return X
 
 class ColumnDropper(BaseEstimator, TransformerMixin):
     """Transformer that drops a configured list of columns from a DataFrame.
@@ -355,6 +464,7 @@ def make_pipeline_ml() -> Pipeline:
         steps=[
             ("basemodel", base),
             ("preprocessor", AutoPreprocessorToDF()),
+            ("balancer", TargetBalancer(method="oversample", random_state=42)),
         ]
     )
 
