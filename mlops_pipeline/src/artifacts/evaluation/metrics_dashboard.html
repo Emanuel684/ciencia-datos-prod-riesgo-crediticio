@@ -1,0 +1,70 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Model Evaluation Dashboard</title>
+	<style>
+		body { font-family: Arial, sans-serif; margin: 24px; }
+		.tabs { display: flex; border-bottom: 1px solid #ddd; gap: 8px; }
+		.tab-button { padding: 10px 14px; border: 1px solid #ddd; border-bottom: none; background: #f7f7f7; cursor: pointer; }
+		.tab-button.active { background: #ffffff; font-weight: bold; }
+		.tab-content { display: none; padding: 16px; border: 1px solid #ddd; }
+		.tab-content.active { display: block; }
+		table { border-collapse: collapse; min-width: 420px; }
+		th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+		th { background: #fafafa; }
+		code { background: #f2f2f2; padding: 2px 5px; }
+	</style>
+</head>
+<body>
+	<h1>Evaluación del modelo desplegado</h1>
+	<div class="tabs">
+		<button class="tab-button active" onclick="openTab(event, 'tab-metrics')">Pestaña métricas</button>
+		<button class="tab-button" onclick="openTab(event, 'tab-meta')">Metadata</button>
+	</div>
+
+	<div id="tab-metrics" class="tab-content active">
+		<h2>Métricas de desempeño</h2>
+		<table>
+			<thead><tr><th>Métrica</th><th>Valor</th></tr></thead>
+			<tbody>
+				<tr><td>accuracy</td><td>0.815682</td></tr>
+<tr><td>precision</td><td>0.962830</td></tr>
+<tr><td>recall</td><td>0.838861</td></tr>
+<tr><td>f1</td><td>0.896580</td></tr>
+<tr><td>balanced_accuracy</td><td>0.595212</td></tr>
+<tr><td>roc_auc</td><td>nan</td></tr>
+			</tbody>
+		</table>
+		<h3>Matriz de confusión</h3>
+		<img src="deployed_confusion_matrix.png" alt="Matriz de confusión" width="640" />
+	</div>
+
+	<div id="tab-meta" class="tab-content">
+		<h2>Metadata de evaluación</h2>
+		<ul>
+			<li>Registros evaluados: <code>2691</code></li>
+			<li>Tiempo inferencia batch (segundos): <code>0.282715</code></li>
+			<li>Endpoint usado: <code>local ModelDeploymentService</code></li>
+			<li>Dataset: <code>Base_de_datos.xlsx</code></li>
+		</ul>
+	</div>
+
+	<script>
+		function openTab(evt, tabId) {
+			const tabContents = document.getElementsByClassName('tab-content');
+			for (let i = 0; i < tabContents.length; i++) {
+				tabContents[i].classList.remove('active');
+			}
+			const tabButtons = document.getElementsByClassName('tab-button');
+			for (let i = 0; i < tabButtons.length; i++) {
+				tabButtons[i].classList.remove('active');
+			}
+			document.getElementById(tabId).classList.add('active');
+			evt.currentTarget.classList.add('active');
+		}
+	</script>
+</body>
+</html>
