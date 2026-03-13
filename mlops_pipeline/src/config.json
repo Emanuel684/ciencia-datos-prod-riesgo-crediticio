@@ -1,9 +1,20 @@
 {
-    "project_code": "codigoproyecto",
-    "project_name": "proyecto_de_clase",
-    "username": "sboteroarango",
-    "bucket": "",
-    "database" : "",
-    "proyecto" : ""
-   
+    "data_path": "Base_de_datos.xlsx",
+    "target_col": "Pago_atiempo",
+    "test_size": 0.25,
+    "random_state": 42,
+
+    "artifacts_dir": "artifacts",
+    "model_filename": "best_model.joblib",
+
+    "deploy_endpoint_url": null,
+    "deploy_port": 8000,
+
+    "cv_n_splits": 10,
+
+    "monitoring_baseline_sample_size": 2000,
+    "monitoring_sample_size": 500,
+    "monitoring_period_seconds": 300,
+
+    "version": "1.0.0"
 }

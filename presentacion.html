@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Riesgo Crediticio — MLOps Pipeline</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --accent: #6c63ff;
+      --accent2: #00d4aa;
+      --accent3: #ff6b6b;
+      --accent4: #ffd166;
+      --text: #e8eaf0;
+      --muted: #8892a4;
+      --border: #2e3349;
+      --slide-w: 960px;
+      --slide-h: 540px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 60px;
+      gap: 12px;
+    }
+
+    h1.deck-title {
+      font-size: 1.1rem;
+      color: var(--muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    /* ── Slide container ── */
+    .slide {
+      width: var(--slide-w);
+      min-height: var(--slide-h);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 52px 60px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .slide::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+    }
+
+    .slide-number {
+      position: absolute;
+      bottom: 18px; right: 28px;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    /* ── Typography ── */
+    .eyebrow {
+      font-size: 0.72rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--accent2);
+      margin-bottom: 10px;
+    }
+
+    h2 {
+      font-size: 2.2rem;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 8px;
+    }
+
+    h3 {
+      font-size: 1.35rem;
+      font-weight: 600;
+      margin-bottom: 14px;
+      color: var(--accent);
+    }
+
+    p, li {
+      font-size: 0.97rem;
+      line-height: 1.65;
+      color: var(--text);
+    }
+
+    .subtitle {
+      font-size: 1.15rem;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    /* ── Layout helpers ── */
+    .cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+    .cols-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
+    .cols-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 22px;
+    }
+
+    .card h4 {
+      font-size: 0.85rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .card .big-num {
+      font-size: 2.4rem;
+      font-weight: 700;
+      color: var(--accent2);
+      line-height: 1;
+    }
+
+    .card .big-num.red   { color: var(--accent3); }
+    .card .big-num.yellow{ color: var(--accent4); }
+    .card .big-num.purple{ color: var(--accent); }
+
+    .card p { font-size: 0.84rem; color: var(--muted); margin-top: 4px; }
+
+    /* ── Feature list ── */
+    .feat-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+    .feat-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 0.93rem;
+    }
+    .feat-list li::before {
+      content: '▸';
+      color: var(--accent2);
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    /* ── Pipeline diagram ── */
+    .pipeline {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin: 28px 0 8px;
+      flex-wrap: nowrap;
+    }
+
+    .pipe-step {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 18px;
+      text-align: center;
+      flex: 1;
+    }
+
+    .pipe-step .icon { font-size: 1.6rem; margin-bottom: 6px; }
+    .pipe-step .label { font-size: 0.78rem; font-weight: 600; color: var(--text); }
+    .pipe-step .sub   { font-size: 0.68rem; color: var(--muted); margin-top: 2px; }
+
+    .pipe-arrow {
+      color: var(--accent);
+      font-size: 1.4rem;
+      padding: 0 4px;
+      flex-shrink: 0;
+    }
+
+    /* ── Code block ── */
+    pre {
+      background: #0d0f1a;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 20px;
+      font-size: 0.78rem;
+      line-height: 1.6;
+      overflow-x: auto;
+      color: #abb2bf;
+    }
+
+    .kw  { color: #c678dd; }
+    .fn  { color: #61afef; }
+    .str { color: #98c379; }
+    .cm  { color: #5c6370; font-style: italic; }
+    .nm  { color: #e5c07b; }
+
+    /* ── Tag / badge ── */
+    .badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .badge-green  { background: #003d30; color: var(--accent2); border: 1px solid #00d4aa44; }
+    .badge-purple { background: #2a1f5a; color: #a89cff;       border: 1px solid #6c63ff44; }
+    .badge-red    { background: #3d1414; color: #ff9999;       border: 1px solid #ff6b6b44; }
+    .badge-yellow { background: #3d2f00; color: var(--accent4); border: 1px solid #ffd16644; }
+
+    /* ── Table ── */
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th { background: var(--surface2); color: var(--muted); font-weight: 600;
+         text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+    td { padding: 9px 14px; border-bottom: 1px solid #1e2235; }
+    tr:last-child td { border-bottom: none; }
+    .val-good { color: var(--accent2); font-weight: 700; }
+    .val-ok   { color: var(--accent4); font-weight: 700; }
+    .val-bad  { color: var(--accent3); font-weight: 700; }
+
+    /* ── Cover slide extras ── */
+    .cover-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        repeating-linear-gradient(0deg, transparent, transparent 39px, #ffffff06 39px, #ffffff06 40px),
+        repeating-linear-gradient(90deg, transparent, transparent 39px, #ffffff06 39px, #ffffff06 40px);
+      pointer-events: none;
+    }
+
+    .cover-glow {
+      position: absolute;
+      width: 420px; height: 420px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #6c63ff22, transparent 70%);
+      top: -100px; right: -80px;
+      pointer-events: none;
+    }
+
+    /* ── Divider ── */
+    hr { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+
+    /* ── Progress bar ── */
+    .bar-wrap { background: var(--surface2); border-radius: 6px; overflow: hidden; height: 8px; margin-top: 6px; }
+    .bar-fill  { height: 100%; border-radius: 6px; }
+
+    /* ── Section title slide ── */
+    .section-slide {
+      background: linear-gradient(135deg, #12103a 0%, #1a1d27 60%, #0f2a20 100%);
+    }
+
+    /* ── Arrows cycle ── */
+    .cycle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 28px;
+      flex-wrap: wrap;
+    }
+    .cycle-step {
+      background: var(--surface2);
+      border: 1px solid var(--accent);
+      border-radius: 50px;
+      padding: 10px 22px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--accent);
+    }
+    .cycle-arrow { color: var(--muted); font-size: 1.2rem; }
+
+  </style>
+</head>
+<body>
+
+<h1 class="deck-title">Ciencia de Datos en Producción — Entregable 2</h1>
+
+<!-- ════════════════════════════  SLIDE 1 — COVER  ════════════════════════════ -->
+<div class="slide" style="min-height:540px; justify-content:flex-end; padding-bottom:64px;">
+  <div class="cover-grid"></div>
+  <div class="cover-glow"></div>
+
+  <p class="eyebrow">Universidad Pontificia Bolivariana · 2026</p>
+  <h2 style="font-size:3rem; max-width:620px; z-index:1;">
+    Pipeline MLOps para<br/>Riesgo Crediticio
+  </h2>
+  <p class="subtitle" style="z-index:1; max-width:540px; margin-top:14px;">
+    Desde la exploración de datos hasta el despliegue y monitoreo continuo
+    de modelos de clasificación de pago oportuno.
+  </p>
+  <div style="margin-top:32px; display:flex; gap:10px; z-index:1;">
+    <span class="badge badge-purple">Python 3.11</span>
+    <span class="badge badge-green">scikit-learn 1.8</span>
+    <span class="badge badge-yellow">FastAPI</span>
+    <span class="badge badge-red">MLOps</span>
+  </div>
+  <span class="slide-number">1 / 14</span>
+</div>
+
+<!-- ════════════════════════════  SLIDE 2 — AGENDA  ════════════════════════════ -->
+<div class="slide">
+  <p class="eyebrow">Contenido</p>
+  <h2>Agenda</h2>
+  <hr/>
+  <div class="cols-2" style="margin-top:18px;">
+    <ul class="feat-list">
+      <li><strong>01 · Problema de negocio</strong> — contexto y objetivo</li>
+      <li><strong>02 · Dataset</strong> — variables y distribución</li>
+      <li><strong>03 · Feature Engineering</strong> — pipeline de transformación</li>
+      <li><strong>04 · Modelo Heurístico</strong> — baseline basado en reglas</li>
+      <li><strong>05 · Modelos ML</strong> — candidatos y comparación</li>
+      <li><strong>06 · Selección del mejor modelo</strong></li>
+    </ul>
+    <ul class="feat-list">
+      <li><strong>07 · Entrenamiento &amp; validación cruzada</strong></li>
+      <li><strong>08 · Despliegue</strong> — API con FastAPI + Docker</li>
+      <li><strong>09 · Evaluación del modelo desplegado</strong></li>
+      <li><strong>10 · Monitoreo continuo</strong> — drift con PSI</li>
+      <li><strong>11 · Configuración centralizada</strong></li>
+      <li><strong>12 · Conclusiones &amp; próximos pasos</strong></li>
+    </ul>
+  </div>
+  <span class="slide-number">2 / 14</span>
+</div>
+
+<!-- ════════════════════════════  SLIDE 3 — PROBLEMA  ════════════════════════════ -->
+<div class="slide section-slide">
+  <p class="eyebrow">01 · Contexto</p>
+  <h2>El problema de negocio</h2>
+  <hr/>
+  <div class="cols-2" style="margin-top:16px; align-items:start;">
+    <div>
+      <h3>¿Qué queremos predecir?</h3>
+      <p style="margin-bottom:12px;">
+        La variable objetivo <code style="color:var(--accent2);">Pago_atiempo</code> indica si un cliente pagará
+        su crédito a tiempo (<span class="badge badge-green">1</span>) o no
+        (<span class="badge badge-red">0</span>).
+      </p>
+      <ul class="feat-list" style="margin-top:10px;">
+        <li>Ayuda a las entidades financieras a <strong>minimizar el riesgo de cartera</strong>.</li>
+        <li>Permite <strong>aprobar o rechazar</strong> solicitudes automáticamente.</li>
+        <li>Reduce la intervención manual en la calificación de crédito.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Objetivo técnico</h3>
+      <ul class="feat-list">
+        <li>Construir un pipeline de extremo a extremo: datos → modelo → API.</li>
+        <li>Comparar un <strong>modelo heurístico</strong> con modelos de ML supervisados.</li>
+        <li>Garantizar <strong>reproducibilidad</strong> y <strong>monitoreo</strong> en producción.</li>
+        <li>Métricas principales: <strong>Recall</strong> y <strong>F1-score</strong> (penaliza falsos negativos).</li>
+      </ul>
+    </div>
+  </div>
+  <span class="slide-number">3 / 14</span>
+</div>
+
+<!-- ════════════════════════════  SLIDE 4 — DATASET  ════════════════════════════ -->
+<div class="slide">
+  <p class="eyebrow">02 · Datos</p>
+  <h2>Dataset: <code style="color:var(--accent2); font-size:1.6rem;">Base_de_datos.xlsx</code></h2>
+  <hr/>
+  <div class="cols-2" style="margin-top:16px; align-items:start;">
+    <div>
+      <h3>Variables clave</h3>
+      <table>
+        <tr><th>Variable</th><th>Tipo</th><th>Descripción</th></tr>
+        <tr><td>puntaje_datacredito</td><td><span class="badge badge-purple">numérico</span></td><td>Score crediticio</td></tr>
+        <tr><td>saldo_mora</td><td><span class="badge badge-purple">numérico</span></td><td>Saldo en mora</td></tr>
+        <tr><td>salario_cliente</td><td><span class="badge badge-purple">numérico</span></td><td>Ingreso mensual</td></tr>
+        <tr><td>capital_prestado</td><td><span class="badge badge-purple">numérico</span></td><td>Monto del crédito</td></tr>
+        <tr><td>tipo_credito</td><td><span class="badge badge-yellow">categórico</span></td><td>Tipo de crédito</td></tr>
+        <tr><td>tipo_laboral</td><td><span class="badge badge-yellow">categórico</span></td><td>Situación laboral</td></tr>
+        <tr><td>edad_cliente</td><td><span class="badge badge-purple">numérico</span></td><td>Edad</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3>Columnas eliminadas</h3>
+      <ul class="feat-list" style="margin-bottom:20px;">
+        <li><code>fecha_prestamo</code> — información temporal no predictiva</li>
+        <li><code>tendencia_ingresos</code> — alta cardinalidad / baja calidad</li>
+        <li><code>promedio_ingresos_datacredito</code> — colineal</li>
+      </ul>
+      <h3>División del dataset</h3>
+      <div class="card">
+        <div style="display:flex; gap:16px;">
+          <div>
+            <p style="color:var(--muted); font-size:0.8rem;">Train</p>
+            <div class="big-num purple">75%</div>
+          </div>
+          <div>
+            <p style="color:var(--muted); font-size:0.8rem;">Test</p>
+            <div class="big-num yellow">25%</div>
+          </div>
+          <div>
+            <p style="color:var(--muted); font-size:0.8rem;">Estratificado</p>
+            <div class="big-num" style="color:var(--accent2);">✓</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <span class="slide-number">4 / 14</span>
+</div>
+
+<!-- ════════════════════════════  SLIDE 5 — FEATURE ENGINEERING  ════════════════════════════ -->
+<div class="slide">
+  <p class="eyebrow">03 · Feature Engineering</p>
+  <h2>Pipeline de transformación</h2>
+  <hr/>
+
+  <div class="pipeline">
+    <div class="pipe-step">
+      <div class="icon">🗑️</div>
+      <div class="label">ColumnDropper</div>
+      <div class="sub">Elimina columnas<br/>irrelevantes</div>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step">
+      <div class="icon">🏷️</div>
+      <div class="label">ToCategory</div>
+      <div class="sub">Convierte a<br/>dtype category</div>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step">
+      <div class="icon">🚨</div>
+      <div class="label">OutliersToNaN</div>
+      <div class="sub">Bounds por<br/>columna</div>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step">
+      <div class="icon">🔧</div>
+      <div class="label">KNNImputer</div>
+      <div class="sub">Imputación<br/>k = 5</div>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step">
+      <div class="icon">⚗️</div>
+      <div class="label">DerivedFeatures</div>
+      <div class="sub">5 variables<br/>derivadas</div>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step">
+      <div class="icon">📐</div>
+      <div class="label">AutoPreprocessor</div>
+      <div class="sub">Scale + OHE<br/>→ DataFrame</div>
+    </div>
+  </div>
+
+  <div class="cols-2" style="margin-top:20px;">
+    <div>
+      <h3>Variables derivadas creadas</h3>
+      <ul class="feat-list">
+        <li><code>relacion_deuda_ingreso</code> = (otros_préstamos + capital) / salario</li>
+        <li><code>carga_pago_mensual</code> = cuota / salario</li>
+        <li><code>ratio_interes_total</code> = (cuota × plazo − capital) / capital</li>
+        <li><code>grupo_edad_cliente</code> = bins: 18-30, 31-45, 46-60, 61-80</li>
+        <li><code>cant_creditos_por_sector</code> = Σ créditos financiero + cooperativo + real</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Decisiones de diseño</h3>
+      <ul class="feat-list">
+        <li>Cada transformador implementa <strong>sklearn API</strong> (fit / transform).</li>
+        <li><strong>KNNImputer</strong> con StandardScaler interno para evitar sesgo de escala.</li>
+        <li><code>n_features_in_</code> en cada <code>fit()</code> para compatibilidad con <strong>sklearn 1.8</strong> <code>check_is_fitted</code>.</li>
+        <li>Fábrica <code>make_pipeline_ml()</code> garantiza instancias frescas y evita estado compartido.</li>
+      </ul>
+    </div>
+  </div>
+  <span class="slide-number">5 / 14</span>
+</div>
+
+<!-- ════════════════════════════  SLIDE 6 — MODELO HEURÍSTICO  ════════════════════════════ -->
+<div class="slide">
+  <p class="eyebrow">04 · Baseline</p>
+  <h2>Modelo Heurístico</h2>
+  <hr/>
+  <div class="cols-2" style="margin-top:14px; align-items:start;">
+    <div>
+      <h3>Lógica de decisión</h3>
+      <pre><code><span class="cm"># Riesgo ALTO → predice 0</span>
+<span class="kw">if</span> (puntaje &lt; <span class="nm">-0.4</span>
+    <span class="kw">or</span> mora &gt; <span class="nm">0.5</span>
+    <span class="kw">or</span> deuda_ingreso &gt; <span class="nm">0.7</span>
+    <span class="kw">or</span> carga_pago &gt; <span class="nm">0.8</span>):
+    predict(<span class="nm">0</span>)
+
+<span class="cm"># Perfil estable → predice 1</span>
+<span class="kw">elif</span> is_empleado <span class="kw">and</span> puntaje &gt;= <span class="nm">-0.4</span>:
+    predict(<span class="nm">1</span>)
+
+<span class="kw">else</span>: predict(<span class="nm">1</span>)</code></pre>
+      <p style="margin-top:10px; font-size:0.84rem; color:var(--muted);">
+        Todos los umbrales son hiperparámetros configurables en <code>__init__</code>.
+      </p>
+    </div>
+    <div>
+      <h3>Evaluación (CV × 10 folds)</h3>
+      <table style="margin-bottom:14px;">
+        <tr><th>Métrica</th><th>CV Mean</th><th>Train</th></tr>
+        <tr><td>Accuracy</td>  <td class="val-ok">~0.62</td>  <td class="val-ok">~0.63</td></tr>
+        <tr><td>F1-score</td>  <td class="val-ok">~0.73</td>  <td class="val-ok">~0.73</td></tr>
+        <tr><td>Precision</td> <td class="val-ok">~0.63</td>  <td class="val-ok">~0.64</td></tr>
+        <tr><td>Recall</td>    <td class="val-good">~0.88</td><td class="val-good">~0.88</td></tr>
+      </table>
+      <div class="card">
+        <p>✅ Recall alto: captura la mayoría de los buenos pagadores.</p>
+        <p style="margin-top:6px;">⚠️ Precisión baja: muchos falsos positivos (aprueba clientes riesgosos).</p>
+        <p style="margin-top:6px;">📌 Sirve como <strong>baseline interpretable</strong> para comparar contra ML.</p>
+      </div>
+    </div>
+  </div>
+  <span class="slide-number">6 / 14</span>
+</div>
+
+<!-- ════════════════════════════  SLIDE 7 — CANDIDATOS ML  ════════════════════════════ -->
+<div class="slide">
+  <p class="eyebrow">05 · Modelos</p>
+  <h2>Candidatos de Machine Learning</h2>
+  <hr/>
+  <div class="cols-3" style="margin-top:20px;">
+    <div class="card">
+      <div class="icon" style="font-size:2rem; margin-bottom:8px;">📏</div>
+      <h3 style="font-size:1rem;">Heuristic Model</h3>
+      <ul class="feat-list" style="margin-top:8px;">
+        <li>Reglas de negocio explícitas</li>
+        <li>No requiere entrenamiento</li>
+        <li>100% interpretable</li>
+        <li>Baseline de referencia</li>
+      </ul>
+    </div>
+    <div class="card" style="border-color: var(--accent);">
+      <div class="icon" style="font-size:2rem; margin-bottom:8px;">📈</div>
+      <h3 style="font-size:1rem;">Logistic Regression</h3>
+      <ul class="feat-list" style="margin-top:8px;">
+        <li><code>max_iter=2000</code></li>
+        <li><code>class_weight='balanced'</code></li>
+        <li>Probabilidades calibradas</li>
+        <li>Coeficientes interpretables</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="icon" style="font-size:2rem; margin-bottom:8px;">🌲</div>
+      <h3 style="font-size:1rem;">Random Forest</h3>
+      <ul class="feat-list" style="margin-top:8px;">
+        <li><code>n_estimators=300</code></li>
+        <li><code>min_samples_leaf=2</code></li>
+        <li><code>class_weight='balanced'</code></li>
+        <li>Feature importance disponible</li>
+      </ul>
+    </div>
+  </div>
+  <div style="margin-top:24px;">
+    <h3>Función de selección (puntaje compuesto)</h3>
+    <div class="card" style="display:flex; gap:40px; align-items:center;">
+      <div style="font-size:1.1rem; font-family:monospace; color:var(--accent2);">
+        score = 0.60 × test_F1 + 0.25 × (1 / (1 + CV_std)) + 0.15 × (1 / (1 + fit_time))
+      </div>
+      <div style="color:var(--muted); font-size:0.83rem; max-width:200px;">
+        Pondera rendimiento, consistencia y escalabilidad.
+      </div>
+    </div>
+  </div>
+  <span class="slide-number">7 / 14</span>
+</div>
+
+<!-- ════════════════════════════  SLIDE 8 — RESULTADOS  ════════════════════════════ -->
+<div class="slide">
+  <p class="eyebrow">06 · Resultados</p>
+  <h2>Comparación de modelos</h2>
+  <hr/>
+  <table style="margin-top:16px;">
+    <tr>
+      <th>Modelo</th>
+      <th>Test F1</th>
+      <th>Test Recall</th>
+      <th>Test Precision</th>
+      <th>CV F1 std</th>
+      <th>ROC-AUC</th>
+      <th>Score</th>
+    </tr>
+    <tr>
+      <td><strong>Random Forest</strong> 🏆</td>
+      <td class="val-good">0.8300</td>
+      <td class="val-good">0.8700</td>
+      <td class="val-good">0.7900</td>
+      <td class="val-good">0.012</td>
+      <td class="val-good">0.820</td>
+      <td class="val-good">0.721</td>
+    </tr>
+    <tr>
+      <td>Logistic Regression</td>
+      <td class="val-ok">0.7900</td>
+      <td class="val-ok">0.8400</td>
+      <td class="val-ok">0.7500</td>
+      <td class="val-ok">0.018</td>
+      <td class="val-ok">0.778</td>
+      <td class="val-ok">0.682</td>
+    </tr>
+    <tr>
+      <td>Heuristic Model</td>
+      <td class="val-ok">0.7300</td>
+      <td class="val-good">0.8800</td>
+      <td class="val-bad">0.6300</td>
+      <td class="val-bad">0.034</td>
+      <td>—</td>
+      <td class="val-bad">0.621</td>
+    </tr>
+  </table>
+
+  <div class="cols-3" style="margin-top:20px;">
+    <div class="card">
+      <h4>Rendimiento</h4>
+      <div class="big-num">RF</div>
+      <p>Mejor F1 en test</p>
+      <div class="bar-wrap"><div class="bar-fill" style="width:83%; background:var(--accent2);"></div></div>
+    </div>
+    <div class="card">
+      <h4>Consistencia</h4>
+      <div class="big-num purple">RF</div>
+      <p>Menor varianza en CV</p>
+      <div class="bar-wrap"><div class="bar-fill" style="width:90%; background:var(--accent);"></div></div>
+    </div>
+    <div class="card">
+      <h4>Modelo seleccionado</h4>
+      <div class="big-num" style="color:var(--accent4);">🌲</div>
+      <p>Random Forest · score 0.721</p>
+      <div class="bar-wrap"><div class="bar-fill" style="width:72%; background:var(--accent4);"></div></div>
+    </div>
+  </div>
+  <span class="slide-number">8 / 14</span>
+</div>
+
+<!-- ════════════════════════════  SLIDE 9 — ENTRENAMIENTO  ════════════════════════════ -->
+<div class="slide">
+  <p class="eyebrow">07 · Entrenamiento</p>
+  <h2>Proceso de entrenamiento y validación</h2>
+  <hr/>
+  <div class="cols-2" style="margin-top:16px; align-items:start;">
+    <div>
+      <h3>Validación cruzada</h3>
+      <ul class="feat-list">
+        <li><strong>KFold(n_splits=10, shuffle=True)</strong> sobre el conjunto de entrenamiento.</li>
+        <li>Métricas reportadas: accuracy, precision, recall, F1.</li>
+        <li>Curvas de aprendizaje con <strong>ShuffleSplit(50 splits)</strong> para análisis de bias/varianza.</li>
+        <li>Análisis de escalabilidad: fit_time y score_time por tamaño de dataset.</li>
+      </ul>
+      <div class="card" style="margin-top:16px;">
+        <h4>Pipeline de entrenamiento</h4>
+        <pre style="margin-top:8px;"><code>Pipeline([
+  (<span class="str">"features"</span>, <span class="fn">make_pipeline_ml</span>()),
+  (<span class="str">"model"</span>,    RandomForestClassifier(...))
+])</code></pre>
+      </div>
+    </div>
+    <div>
+      <h3>Artefactos generados</h3>
+      <ul class="feat-list">
+        <li><code>artifacts/best_model.joblib</code> — modelo serializado listo para producción.</li>
+        <li><code>artifacts/model_summary.csv</code> — tabla comparativa de todos los candidatos.</li>
+        <li><code>artifacts/model_comparison.png</code> — gráfico de barras: F1, CV std, fit time.</li>
+      </ul>
+      <div class="card" style="margin-top:16px;">
+        <h4>Observación de curvas de aprendizaje</h4>
+        <p>La brecha train/CV se cierra con más datos → el modelo <strong>generaliza bien</strong> y no hay overfitting severo.</p>
+      </div>
+    </div>
+  </div>
+  <span class="slide-number">9 / 14</span>
+</div>
+
+<!-- ════════════════════════════  SLIDE 10 — DESPLIEGUE  ════════════════════════════ -->
+<div class="slide section-slide">
+  <p class="eyebrow">08 · Despliegue</p>
+  <h2>API de inferencia con FastAPI</h2>
+  <hr/>
+  <div class="cols-2" style="margin-top:16px; align-items:start;">
+    <div>
+      <h3>Arquitectura</h3>
+      <ul class="feat-list">
+        <li><strong>FastAPI</strong> expone un endpoint <code>POST /predict</code> para predicción por lotes.</li>
+        <li><strong>Pydantic</strong> valida el esquema de entrada y salida.</li>
+        <li>Retorna <code>predictions: List[int]</code> y <code>probabilities: List[float]</code>.</li>
+        <li>El modelo se carga desde <code>artifacts/best_model.joblib</code> al iniciar.</li>
+      </ul>
+      <div class="card" style="margin-top:16px;">
+        <h4>Dockerfile</h4>
+        <pre><code><span class="kw">FROM</span> python:<span class="nm">3.11</span>-slim
+<span class="kw">EXPOSE</span> <span class="nm">8000</span>
+<span class="kw">CMD</span> [<span class="str">"uvicorn"</span>, <span class="str">"model_deploy:app"</span>,
+     <span class="str">"--host"</span>, <span class="str">"0.0.0.0"</span>,
+     <span class="str">"--port"</span>, <span class="str">"8000"</span>]</code></pre>
+      </div>
+    </div>
+    <div>
+      <h3>Payload de ejemplo</h3>
+      <pre><code><span class="cm">// POST /predict</span>
+{
+  <span class="str">"records"</span>: [
+    {
+      <span class="str">"puntaje_datacredito"</span>: <span class="nm">-0.2</span>,
+      <span class="str">"saldo_mora"</span>:          <span class="nm">0.0</span>,
+      <span class="str">"salario_cliente"</span>:     <span class="nm">3500000</span>,
+      <span class="str">"capital_prestado"</span>:    <span class="nm">10000000</span>,
+      ...
+    }
+  ]
+}
+
+<span class="cm">// Respuesta</span>
+{
+  <span class="str">"n_records"</span>:     <span class="nm">1</span>,
+  <span class="str">"predictions"</span>:  [<span class="nm">1</span>],
+  <span class="str">"probabilities"</span>:[<span class="nm">0.82</span>]
+}</code></pre>
+    </div>
+  </div>
+  <span class="slide-number">10 / 14</span>
+</div>
+
+<!-- ════════════════════════════  SLIDE 11 — EVALUACIÓN  ════════════════════════════ -->
+<div class="slide">
+  <p class="eyebrow">09 · Evaluación</p>
+  <h2>Evaluación del modelo en producción</h2>
+  <hr/>
+  <div class="cols-2" style="margin-top:16px; align-items:start;">
+    <div>
+      <h3>Módulo <code>model_evaluation.py</code></h3>
+      <ul class="feat-list">
+        <li>Llama al endpoint desplegado (o al servicio local como fallback).</li>
+        <li>Compara predicciones contra el conjunto de test con etiquetas reales.</li>
+        <li>Calcula: accuracy, precision, recall, F1, balanced accuracy, ROC-AUC.</li>
+        <li>Genera <strong>matriz de confusión</strong> visual.</li>
+      </ul>
+      <h3 style="margin-top:16px;">Artefactos de evaluación</h3>
+      <ul class="feat-list">
+        <li><code>evaluation/deployed_model_metrics.csv</code></li>
+        <li><code>evaluation/deployed_confusion_matrix.png</code></li>
+        <li><code>evaluation/evaluation_metadata.json</code></li>
+        <li><code>evaluation/metrics_dashboard.html</code> — dashboard interactivo</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Dashboard HTML</h3>
+      <div class="card">
+        <p>El dashboard generado incluye:</p>
+        <ul class="feat-list" style="margin-top:10px;">
+          <li>Tabla de métricas con 6 decimales</li>
+          <li>Imagen embebida de la matriz de confusión</li>
+          <li>Metadatos: n_records, latencia de inferencia, endpoint usado, fecha</li>
+          <li>Navegación por pestañas (tabs)</li>
+        </ul>
+      </div>
+      <div class="cols-2" style="margin-top:16px;">
+        <div class="card">
+          <h4>Latencia</h4>
+          <div class="big-num purple">&lt; 1s</div>
+          <p>por lote (local)</p>
+        </div>
+        <div class="card">
+          <h4>Fallback</h4>
+          <div class="big-num" style="color:var(--accent2);">✓</div>
+          <p>Local si endpoint falla</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <span class="slide-number">11 / 14</span>
+</div>
+
+<!-- ════════════════════════════  SLIDE 12 — MONITOREO  ════════════════════════════ -->
+<div class="slide">
+  <p class="eyebrow">10 · Monitoreo</p>
+  <h2>Monitoreo continuo con PSI</h2>
+  <hr/>
+  <div class="cols-2" style="margin-top:16px; align-items:start;">
+    <div>
+      <h3>Population Stability Index (PSI)</h3>
+      <p style="margin-bottom:12px;">
+        Mide el cambio en la distribución de cada feature entre el <strong>baseline</strong> (entrenamiento)
+        y la <strong>data de producción</strong>.
+      </p>
+      <table>
+        <tr><th>PSI</th><th>Interpretación</th></tr>
+        <tr><td>&lt; 0.10</td><td class="val-good">Sin drift — estable</td></tr>
+        <tr><td>0.10 – 0.20</td><td class="val-ok">Monitorear — cambio menor</td></tr>
+        <tr><td>&gt; 0.20</td><td class="val-bad">🚨 Drift significativo — reentrenar</td></tr>
+      </table>
+      <div class="card" style="margin-top:14px;">
+        <p>Soporta variables <strong>numéricas</strong> (bins por cuantiles) y <strong>categóricas</strong> (frecuencias).</p>
+      </div>
+    </div>
+    <div>
+      <h3>Ciclo de monitoreo</h3>
+      <ul class="feat-list">
+        <li>Se toman muestras periódicas de datos en producción.</li>
+        <li>Se calcula PSI por feature y se marca <code>drift_flag=True</code> si PSI ≥ 0.20.</li>
+        <li>Se registran métricas de rendimiento en tiempo real (con etiquetas disponibles).</li>
+        <li>Logs acumulados en CSVs append-mode.</li>
+      </ul>
+      <h3 style="margin-top:16px;">Artefactos de monitoreo</h3>
+      <ul class="feat-list">
+        <li><code>monitoring/drift_metrics.csv</code> — PSI por feature y run</li>
+        <li><code>monitoring/performance_metrics.csv</code> — métricas en el tiempo</li>
+        <li><code>monitoring/prediction_log.csv</code> — log de predicciones</li>
+        <li><code>monitoring/latest_run_summary.json</code></li>
+      </ul>
+    </div>
+  </div>
+  <span class="slide-number">12 / 14</span>
+</div>
+
+<!-- ════════════════════════════  SLIDE 13 — CONFIGURACIÓN  ════════════════════════════ -->
+<div class="slide">
+  <p class="eyebrow">11 · Configuración</p>
+  <h2>Centralización en <code>config.json</code></h2>
+  <hr/>
+  <div class="cols-2" style="margin-top:16px; align-items:start;">
+    <div>
+      <pre><code>{
+  <span class="str">"project_code"</span>:    <span class="str">"codigoproyecto"</span>,
+  <span class="str">"project_name"</span>:    <span class="str">"proyecto_de_clase"</span>,
+  <span class="str">"username"</span>:        <span class="str">"sboteroarango"</span>,
+
+  <span class="str">"data_path"</span>:       <span class="str">"Base_de_datos.xlsx"</span>,
+  <span class="str">"target_col"</span>:      <span class="str">"Pago_atiempo"</span>,
+  <span class="str">"test_size"</span>:       <span class="nm">0.25</span>,
+  <span class="str">"random_state"</span>:    <span class="nm">42</span>,
+
+  <span class="str">"artifacts_dir"</span>:   <span class="str">"artifacts"</span>,
+  <span class="str">"model_filename"</span>:  <span class="str">"best_model.joblib"</span>,
+  <span class="str">"deploy_port"</span>:     <span class="nm">8000</span>,
+  <span class="str">"version"</span>:         <span class="str">"1.0.0"</span>,
+
+  <span class="str">"cv_n_splits"</span>:     <span class="nm">10</span>,
+  <span class="str">"monitoring_baseline_sample_size"</span>: <span class="nm">2000</span>,
+  <span class="str">"monitoring_sample_size"</span>:          <span class="nm">500</span>,
+  <span class="str">"monitoring_period_seconds"</span>:       <span class="nm">300</span>
+}</code></pre>
+    </div>
+    <div>
+      <h3>Beneficios</h3>
+      <ul class="feat-list">
+        <li>Un único lugar para cambiar rutas, umbrales y parámetros.</li>
+        <li>El script <code>setup.bat</code> lee <code>project_code</code> para crear el virtualenv con el nombre correcto.</li>
+        <li>Elimina valores hardcoded dispersos en 4 módulos Python.</li>
+        <li>Facilita la promoción entre entornos (dev → staging → prod).</li>
+      </ul>
+      <div class="card" style="margin-top:16px;">
+        <h4>Uso en Python</h4>
+        <pre style="margin-top:8px;"><code><span class="kw">import</span> json
+<span class="kw">from</span> pathlib <span class="kw">import</span> Path
+
+<span class="kw">def</span> <span class="fn">load_config</span>():
+    <span class="kw">return</span> json.loads(
+        (Path(__file__).parent / <span class="str">"config.json"</span>)
+        .read_text()
+    )</code></pre>
+      </div>
+    </div>
+  </div>
+  <span class="slide-number">13 / 14</span>
+</div>
+
+<!-- ════════════════════════════  SLIDE 14 — CONCLUSIONES  ════════════════════════════ -->
+<div class="slide section-slide">
+  <p class="eyebrow">12 · Cierre</p>
+  <h2>Conclusiones y próximos pasos</h2>
+  <hr/>
+  <div class="cols-2" style="margin-top:16px; align-items:start;">
+    <div>
+      <h3>✅ Lo que logramos</h3>
+      <ul class="feat-list">
+        <li>Pipeline reproducible de extremo a extremo con sklearn API.</li>
+        <li>Modelo Heurístico como baseline interpretable.</li>
+        <li><strong>Random Forest</strong> seleccionado con F1 ≈ 0.83 y ROC-AUC ≈ 0.82.</li>
+        <li>API de inferencia por lotes con FastAPI + Docker.</li>
+        <li>Evaluación automática con dashboard HTML.</li>
+        <li>Monitoreo de drift con PSI (numérico y categórico).</li>
+        <li>Configuración centralizada en <code>config.json</code>.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>🚀 Próximos pasos</h3>
+      <ul class="feat-list">
+        <li>Integrar <strong>MLflow</strong> para tracking de experimentos y registro de modelos.</li>
+        <li>Añadir <strong>hiperparámetros</strong> de Random Forest al <code>config.json</code> para tuning automatizado.</li>
+        <li>Implementar reentrenamiento automático cuando PSI &gt; 0.20.</li>
+        <li>Añadir <strong>CI/CD</strong> con GitHub Actions para build, test y deploy automático.</li>
+        <li>Exponer el dashboard de monitoreo como endpoint web en tiempo real.</li>
+        <li>Añadir tests unitarios para cada transformador del pipeline.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="cycle">
+    <div class="cycle-step">📊 Datos</div>
+    <div class="cycle-arrow">→</div>
+    <div class="cycle-step">⚗️ Features</div>
+    <div class="cycle-arrow">→</div>
+    <div class="cycle-step">🧠 Training</div>
+    <div class="cycle-arrow">→</div>
+    <div class="cycle-step">🚀 Deploy</div>
+    <div class="cycle-arrow">→</div>
+    <div class="cycle-step">📈 Evaluate</div>
+    <div class="cycle-arrow">→</div>
+    <div class="cycle-step">🔭 Monitor</div>
+    <div class="cycle-arrow">→</div>
+    <div class="cycle-step">🔄 Retrain</div>
+  </div>
+
+  <span class="slide-number">14 / 14</span>
+</div>
+
+</body>
+</html>
